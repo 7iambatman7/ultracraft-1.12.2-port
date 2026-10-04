@@ -209,6 +209,9 @@ namespace UltraBridge
         public static Bridge I;
         /// <summary>ULTRAKILL units per Minecraft block: V1's 3.5 u capsule stands for the 1.8-block player.</summary>
         public const float K = 3.5f / 1.8f;
+
+        /// <summary>ULTRAKILL's frame rate cap (OPTS fps; Ultracraft's settings).</summary>
+        public static int FpsCap = 120;
         public Vector3 origin; // Minecraft coordinates of the ULTRAKILL world origin
         bool originSet;
         bool levelPrepared;
@@ -2988,7 +2991,7 @@ namespace UltraBridge
             }
             if (vc.targetTexture != finalRT) vc.targetTexture = finalRT;
             if (QualitySettings.vSyncCount != 0) QualitySettings.vSyncCount = 0;
-            if (Application.targetFrameRate != 240) Application.targetFrameRate = 240;
+            if (Application.targetFrameRate != FpsCap) Application.targetFrameRate = FpsCap;
             hookedCam = vc;
         }
 

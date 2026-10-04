@@ -82,6 +82,10 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 				v -> UltracraftConfig.enemyBlockDamage = v),
 			slider("Impact Frames", "How long ULTRAKILL's impact frames (the freeze on big hits) last: 0.1x to 3x.", 1, 30, Math.round(UltracraftConfig.impactFrames * 10f),
 				v -> String.format(Locale.ROOT, "%.1fx", v / 10f), v -> UltracraftConfig.impactFrames = v / 10f),
+			slider("ULTRAKILL Resolution", "How tall ULTRAKILL draws its picture (scaled up to fill the window). Lower = much faster; this is the biggest frame rate setting.",
+				0, 6, resIndex(), v -> RES_NAMES[v], v -> UltracraftConfig.v1Height = RES[v]),
+			slider("ULTRAKILL FPS Cap", "How many frames a second ULTRAKILL draws. It shares the graphics card with Minecraft: a lower cap leaves Minecraft more.",
+				3, 24, UltracraftConfig.ukFps / 10, v -> v * 10 + " FPS", v -> UltracraftConfig.ukFps = v * 10),
 			bool("OP Shop", "The shop's Upgrades page goes much further: every weapon's and arm's Power up to 1500%, and blast sizes (Payload, Shockwave, the mini nuke) up to 1500%.",
 				UltracraftConfig.opShop, v -> {
 					UltracraftConfig.opShop = v;
@@ -100,6 +104,14 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 	public void removed() {
 		super.removed();
 		UltracraftConfig.save();
+	}
+
+	private static final int[] RES = {360, 480, 540, 720, 900, 1080, 0};
+	private static final String[] RES_NAMES = {"360p", "480p", "540p", "720p", "900p", "1080p", "Full"};
+
+	private static int resIndex() {
+		for (int i = 0; i < RES.length; i++) if (RES[i] == UltracraftConfig.v1Height) return i;
+		return 3;
 	}
 
 	/** The OP Shop changed: every player's Upgrades page hears its new levels. */

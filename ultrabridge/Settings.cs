@@ -44,6 +44,8 @@ namespace UltraBridge
                         var p = kv.Split('=');
                         if (p.Length != 2) continue;
                         if (p[0] == "impact" && float.TryParse(p[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) ImpactScale = Mathf.Clamp(f, 0.1f, 3f);
+                        // how often ULTRAKILL draws: every frame it draws costs the graphics card Minecraft needs too
+                        if (p[0] == "fps" && int.TryParse(p[1], out var fps)) FpsCap = Mathf.Clamp(fps, 30, 240);
                     }
                     break;
                 case "UKPREF":

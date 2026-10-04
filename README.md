@@ -22,6 +22,16 @@ You need to own **ULTRAKILL** (Steam) and **Minecraft Java Edition**. Windows on
 Settings: the **Ultracraft...** button on the title screen, the pause menu and Options (or `/uc settings`).
 Commands: `/uc help`.
 
+## If it's laggy
+
+Two games run at once and share your graphics card. In **Ultracraft...** settings:
+- **ULTRAKILL Resolution**: 540p or 480p is the biggest frame rate win (720p is the default).
+- **ULTRAKILL FPS Cap**: 60 or 90 leaves Minecraft more room (120 is the default).
+- **Sharp Shop Screen**: off.
+
+Also: Minecraft render distance 8-12 chunks, and Sodium (Fabric) helps Minecraft's side. ULTRAKILL's own
+graphics options (in ULTRAKILL itself) apply too.
+
 Multiplayer: open a world to LAN; everyone needs ULTRAKILL plus both mods.
 
 Your own ULTRAKILL save is never written: progress lives in the Minecraft world.

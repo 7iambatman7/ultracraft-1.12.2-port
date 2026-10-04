@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Mixin(Player.class)
 public abstract class PlayerMixin {
-	@Redirect(method = "actuallyHurt", at = @At(value = "INVOKE", target = "setHealth(F)V"))
+	@Redirect(method = "actuallyHurt", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;setHealth(F)V"))
 	private void ultracraft$hurtV1(Player self, float health, ServerLevel level, DamageSource source, float amount) {
 		if (!V1Damage.take(self, source, self.getHealth() - health)) self.setHealth(health);
 	}

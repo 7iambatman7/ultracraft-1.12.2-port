@@ -6,6 +6,81 @@ repositories {
 	mavenCentral()
 }
 
+// ------------------------------------------------------------------ Minecraft versions
+// One source, several Minecraft versions: build with -Pmc=<version> (default 1.21.11). versions/<version>.properties
+// says which Minecraft and Fabric API that is. The sources are written for 1.21.11; where a version needs other code,
+// it's marked like this, and the matching branch is switched on when building for that version:
+//     //#if MC >= 12109
+//     code for 1.21.9 and newer
+//     //#else
+//     //$$ code for older versions
+//     //#endif
+def mc = (project.findProperty("mc") ?: "1.21.11").toString()
+def vp = new Properties()
+file("versions/${mc}.properties").withInputStream { vp.load(it) }
+vp.each { k, v -> project.ext.set(k, v) }
+def mcNum = { String v -> def p = v.tokenize('.') ; (p[0] as int) * 10000 + (p[1] as int) * 100 + (p.size() > 2 ? p[2] as int : 0) }
+def MC = mcNum(mc)
+layout.buildDirectory.set(file("build/${mc}"))
+
+def ppTest = { String cond ->
+	cond.split("&&").every { part ->
+		def m = (part.trim() =~ /MC\s*(>=|<=|==|!=|>|<)\s*(\d+)/)
+		if (!m.matches()) throw new GradleException("preprocessor: can't read '${part}'")
+		int n = m.group(2) as int
+		switch (m.group(1)) { case ">=": return MC >= n; case "<=": return MC <= n; case ">": return MC > n; case "<": return MC < n; case "==": return MC == n; default: return MC != n }
+	}
+}
+def ppText = { String text, String name ->
+	def out = new StringBuilder()
+	def stack = [] // each: [active of this branch, any branch taken, parent active]
+	boolean active = true
+	text.eachLine { line ->
+		def t = line.trim()
+		if (t.startsWith("//#if ")) {
+			boolean on = active && ppTest(t.substring(6))
+			stack << [active, on]
+			active = on
+			out << line << "\n"; return
+		}
+		if (t.startsWith("//#elseif ")) {
+			def top = stack.last()
+			boolean on = top[0] && !top[1] && ppTest(t.substring(10))
+			if (on) top[1] = true
+			active = on
+			out << line << "\n"; return
+		}
+		if (t == "//#else") {
+			def top = stack.last()
+			active = top[0] && !top[1]
+			top[1] = true
+			out << line << "\n"; return
+		}
+		if (t == "//#endif") {
+			active = stack.removeLast()[0]
+			out << line << "\n"; return
+		}
+		if (stack.isEmpty()) { out << line << "\n"; return }
+		def indent = line.takeWhile { it == '\t' || it == ' ' }
+		def body = line.substring(indent.length())
+		boolean commented = body.startsWith("//\$\$")
+		if (active && commented) out << indent << body.substring(4).replaceFirst(/^ /, "") << "\n"
+		else if (!active && !commented && body.length() > 0) out << indent << "//\$\$ " << body << "\n"
+		else out << line << "\n"
+	}
+	if (!stack.isEmpty()) throw new GradleException("preprocessor: unclosed //#if in ${name}")
+	out.toString()
+}
+def ppDir = file("build/${mc}/pp/java")
+delete ppDir
+fileTree("src/main/java").each { f ->
+	def rel = file("src/main/java").toPath().relativize(f.toPath()).toString()
+	def dst = new File(ppDir, rel)
+	dst.parentFile.mkdirs()
+	dst.setText(ppText(f.getText("UTF-8"), rel), "UTF-8")
+}
+sourceSets.main.java.srcDirs = [ppDir]
+
 loom {
 	runs {
 		client {
@@ -15,24 +90,32 @@ loom {
 }
 
 dependencies {
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	minecraft "com.mojang:minecraft:${project.ext.minecraft_version}"
 	mappings loom.officialMojangMappings()
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.ext.fabric_api_version}"
 }
 
 processResources {
 	def version = project.version
 	inputs.property "version", version
-	filesMatching("fabric.mod.json") { expand "version": version }
+	inputs.property "mc", mc
+	filesMatching("fabric.mod.json") { expand "version": version, "minecraft": mc }
+	def java = project.ext.java_release
+	filesMatching("ultracraft.mixins.json") { filter { it.replace('"JAVA_21"', '"JAVA_' + java + '"') } }
 }
 
-tasks.withType(JavaCompile).configureEach { it.options.release = 21 }
+def javaRelease = (project.ext.java_release as int)
+tasks.withType(JavaCompile).configureEach { it.options.release = javaRelease; it.options.compilerArgs += ["-Xmaxerrs", "2000"] }
 
 java {
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+	sourceCompatibility = JavaVersion.toVersion(javaRelease)
+	targetCompatibility = JavaVersion.toVersion(javaRelease)
 }
+
+// the jar says which Minecraft it's for: ultracraft-<version>+<minecraft>.jar
+base.archivesName = "ultracraft"
+version = "${project.version}+${mc}"
 
 // The Minecraft launcher's "Ultracraft" profile plays from ../minecraft: every build puts the mod (and the Fabric API
 // it needs) in its mods folder, so the launcher always starts the latest build.
@@ -41,7 +124,7 @@ tasks.register("installLauncher") {
 	dependsOn remapJar
 	doLast {
 		launcherMods.mkdirs()
-		def api = configurations.detachedConfiguration(dependencies.create("net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"))
+		def api = configurations.detachedConfiguration(dependencies.create("net.fabricmc.fabric-api:fabric-api:${project.ext.fabric_api_version}"))
 		api.transitive = false
 		launcherMods.listFiles().findAll { it.name.startsWith("ultracraft-") || it.name.startsWith("fabric-api-") }.each { it.delete() }
 		copy {
@@ -51,4 +134,5 @@ tasks.register("installLauncher") {
 		}
 	}
 }
-build.finalizedBy installLauncher
+// the launcher profile plays 1.21.11
+if (mc == "1.21.11") build.finalizedBy installLauncher

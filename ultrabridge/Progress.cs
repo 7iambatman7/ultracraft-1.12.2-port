@@ -101,8 +101,13 @@ namespace UltraBridge
         }
 
         /// <summary>The shop spent (or the world paid) P: ULTRAKILL's AddMoney, kept here instead of in the save.</summary>
+        /// <summary>The P V1 can spend (endless with the Infinite P cheat).</summary>
+        static int Spendable => InfiniteP ? int.MaxValue / 2 : UcMoney;
+
         public void AddUcMoney(int delta)
         {
+            // Infinite P: the shop takes nothing
+            if (InfiniteP && delta < 0) return;
             UcMoney = Math.Max(0, UcMoney + delta);
             if (Net.Connected) Net.Send("PADD " + delta);
         }
@@ -615,9 +620,9 @@ namespace UltraBridge
         {
             var all = TracksOf(up.group);
             var key = all[Mathf.Clamp(up.track, 0, all.Length - 1)];
-            if (!UcUp.TryGetValue(key, out var t) || t.level >= t.max || UcMoney < t.cost) return;
-            // Minecraft checks, takes the P and answers with UPGRADES and MONEY
-            Net.Send("UPBUY " + key);
+            if (!UcUp.TryGetValue(key, out var t) || t.level >= t.max || Spendable < t.cost) return;
+            // Minecraft checks, takes the P and answers with UPGRADES and MONEY (nothing with Infinite P)
+            Net.Send("UPBUY " + key + (InfiniteP ? " free" : ""));
         }
 
         void UpgradeTexts()
@@ -679,7 +684,7 @@ namespace UltraBridge
                     var key = picked;
                     UcUp.TryGetValue(key, out var tr);
                     bool maxed = tr == null || tr.level >= tr.max;
-                    bool can = !maxed && UcMoney >= tr.cost;
+                    bool can = !maxed && Spendable >= tr.cost;
                     if (buy.text != null)
                         buy.text.text = maxed ? TrackName(key) + ": Maxed"
                             : can ? "Buy " + TrackName(key) + ": " + MoneyText.DivideMoney(tr.cost) + " <color=#FF4343>P</color>"
@@ -721,7 +726,7 @@ namespace UltraBridge
                 return;
             }
             int price = PriceOf(gear, 0);
-            if (UcMoney < price) return;
+            if (Spendable < price) return;
             GameProgressSaver.AddMoney(-price);
             GameProgressSaver.AddGear(gear);
             if (sound != null) Instantiate(sound);
@@ -807,7 +812,7 @@ namespace UltraBridge
                 var image = button.GetComponent<Image>();
                 var sb = button.GetComponent<ShopButton>();
                 int price = PriceOf(gear, 0);
-                bool owned = Owns(gear), can = Owns(needs) && UcMoney >= price;
+                bool owned = Owns(gear), can = Owns(needs) && Spendable >= price;
                 // once bought it's a switch: standard or alternate
                 if (text != null)
                     text.text = owned ? (AlternateOn(gear.Substring(0, gear.Length - 3)) ? "ALTERNATE\n<color=#FF4343>ON</color>" : "ALTERNATE\nOFF")
@@ -1148,7 +1153,7 @@ namespace UltraBridge
         static bool Prefix(ref int __result)
         {
             if (!Bridge.AllWeapons) return true;
-            __result = Bridge.UcMoney;
+            __result = Bridge.InfiniteP ? 999999999 : Bridge.UcMoney;
             return false;
         }
     }
@@ -1239,11 +1244,15 @@ namespace UltraBridge
     [HarmonyPatch(typeof(EnemyIdentifier), nameof(EnemyIdentifier.DeliverDamage))]
     static class UpgradedDamage
     {
+        static readonly HashSet<string> V1Hitters = new HashSet<string> { "punch", "heavypunch", "hook", "ground slam", "coin", "cannonball", "shotgunzone", "railcannon", "explosion" };
+
         [HarmonyPriority(Priority.First)]
         static void Prefix(EnemyIdentifier __instance, ref float multiplier, GameObject sourceWeapon)
         {
             if (!Bridge.AllWeapons) return;
             var kind = Bridge.WeaponKind(sourceWeapon);
+            // the One-Hit Kills cheat: whatever V1 hits dies
+            if (Bridge.OneHitKills && (kind != null || V1Hitters.Contains(__instance.hitter ?? ""))) multiplier *= 1000f;
             if (kind != null) multiplier *= Bridge.Power(kind);
             else if (__instance.hitter == "punch") multiplier *= Bridge.Power("arm0");
             else if (__instance.hitter == "heavypunch") multiplier *= Bridge.Power("arm1");

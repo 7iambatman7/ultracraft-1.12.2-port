@@ -2,7 +2,7 @@
 
 The real ULTRAKILL, played inside the real Minecraft 1.21.11. ULTRAKILL runs alongside Minecraft and is drawn into
 its window; Minecraft's blocks and mobs become ULTRAKILL's world and enemies. Bosses with modifiers, P, the shop,
-upgrades, the Cyber Grind, and LAN co-op.
+upgrades, arenas themed after its layers, its music in fights, the Cyber Grind, cheats, and LAN co-op.
 
 You need to own **ULTRAKILL** (Steam) and **Minecraft Java Edition**. Windows only.
 
@@ -19,8 +19,55 @@ You need to own **ULTRAKILL** (Steam) and **Minecraft Java Edition**. Windows on
 4. Start Steam, then start Minecraft with the Fabric profile. ULTRAKILL starts by itself (and closes with
    Minecraft); open a world and you become V1 (F8 toggles back to Steve).
 
-Settings: the **Ultracraft...** button on the title screen, the pause menu and Options (or `/uc settings`).
 Commands: `/uc help`.
+
+## Settings
+
+**Ultracraft...** (title screen, pause menu, Options, or `/uc settings`) has a page for each of these:
+- **Enemies & Bosses**: Minecraft's mobs, ULTRAKILL's enemies, bosses and the time between them, arenas, enemies as Steve.
+- **Gameplay**: becoming V1, what breaks blocks, impact frames, starting ULTRAKILL with Minecraft.
+- **Shop & Rewards**: style rewards, the OP Shop, the sharp shop screen.
+- **Performance**: ULTRAKILL's resolution and frame rate, low-latency frames.
+- **Music**: ULTRAKILL's fight music, boss themes, calm music, volumes.
+- **Cheats**: ULTRAKILL's Sandbox cheats and Ultracraft's.
+- **ULTRAKILL Settings**: sensitivity, field of view, screen shake and the rest, as Ultracraft plays them.
+- **ULTRAKILL Controls**: rebind ULTRAKILL's keys.
+
+## Enemies, arenas and rewards
+
+ULTRAKILL's enemies spawn in the dark, and which ones depends on where you are:
+- husks on the plains;
+- Greed's soldiers, idols and sentries in deserts and badlands;
+- Gluttony's flesh in swamps;
+- Violence's machines in jungles and deep caves;
+- in the Nether, demons by biome: souls in soul sand valleys, flesh in crimson forests, industry in basalt deltas;
+- in the End, angels (Virtues, Powers, Providence).
+
+**Arenas** generate in new parts of the world, one for each of ULTRAKILL's layers:
+- Prelude, Limbo, Lust, Gluttony, Greed, Wrath and Violence in the Overworld;
+- Heresy in the Nether;
+- a Prime Sanctum in the End.
+
+Each has a boss waiting. Step inside the ring as V1 to fight it, with the layer's own song. Beat it and a chest of loot appears on the dais. `/locate structure #ultracraft:arenas` finds the nearest one.
+
+**Style rewards**: kills at style rank S and up pay extra experience and loot. Every fifth kill in a row at that rank pays out for sure, with P on top. The loot gets better with the rank: diamonds and golden apples at SSS, netherite at ULTRAKILL.
+
+## Music
+
+**Ultracraft... → Music → Fight Music** picks what plays in fights:
+- off;
+- a random ULTRAKILL song each fight;
+- any song from its soundtrack: the levels, the Prime Sanctums, the Cyber Grind's tracks.
+
+Bosses and arenas bring their own song where ULTRAKILL has one (V2: Versus, Minos Prime: Order...). Minecraft's music pauses meanwhile.
+
+## Cheats
+
+**Ultracraft... → Cheats** has two groups:
+- **ULTRAKILL's own Sandbox cheats**: noclip, flight, invincibility, no weapon cooldown, infinite wall jumps, blind enemies, enemy infighting, Kill All Enemies and more.
+- **Ultracraft's**: Infinite P, All Weapons & Arms, One-Hit Kills, Slow Motion, Super Speed, Infinite Stamina, Never Hungry.
+
+They're Ultracraft's settings: ULTRAKILL's own save and settings are never touched. In your own world (singleplayer, or one you host) they're always available; on someone else's server, only for operators.
 
 ## If it's laggy
 
@@ -28,10 +75,13 @@ Two games run at once and share your graphics card. In **Ultracraft...** setting
 - **ULTRAKILL Resolution**: 540p or 480p is the biggest frame rate win (720p is the default).
 - **ULTRAKILL FPS Cap**: Match Minecraft (the default) follows Minecraft's frame limit, the smoothest (as V1, Minecraft
   shows every ULTRAKILL frame once, in step with it); a lower cap leaves Minecraft more room on a weak graphics card.
+- **Low-Latency Frames** (on by default): ULTRAKILL hands each frame over as soon as it's drawn: less input lag.
 - **Sharp Shop Screen**: off.
 
-Also: Minecraft render distance 8-12 chunks, and Sodium (Fabric) helps Minecraft's side. ULTRAKILL's own
-graphics options (in ULTRAKILL itself) apply too.
+Also: Minecraft render distance 8-12 chunks. ULTRAKILL's own graphics options (in ULTRAKILL itself) apply too.
+
+**Sodium and Iris** work with Ultracraft (tested with Sodium 0.8.14 and Iris 1.10.8 on 1.21.11): put them in the mods
+folder for a faster Minecraft side. Shader packs are untested.
 
 ## Multiplayer
 

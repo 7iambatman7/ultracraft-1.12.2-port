@@ -151,11 +151,11 @@ final class UkProgress extends SavedData {
 	}
 
 	/** UPBUY key from the shop's Upgrades page: the next level, if there's one and V1 can pay. */
-	boolean buyUpgrade(String key) {
+	boolean buyUpgrade(String key, boolean free) {
 		UkUpgrades.Track t = UkUpgrades.TRACKS.get(key);
 		if (t == null) return false;
 		int lv = level(key);
-		int cost = t.costTo(lv + 1);
+		int cost = free ? 0 : t.costTo(lv + 1);
 		if (lv >= t.max() || money < cost) return false;
 		add(-cost);
 		setLevel(key, lv + 1);

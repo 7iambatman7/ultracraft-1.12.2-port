@@ -138,6 +138,13 @@ public final class UkFrame {
 		if (color == null || w != texW || h != texH || maskBpp != texMaskBpp) makeTextures(w, h, maskBpp);
 		if (seq != lastSeq) {
 			lastSeq = seq;
+			// how long ago ULTRAKILL drew it (its clock, from ours and the offset the pings found)
+			int drawnAt = map.getInt(28);
+			long offset = clockOffsetUs;
+			if (drawnAt != 0 && offset != Long.MIN_VALUE) {
+				ageSumUs += (int) (System.nanoTime() / 1000L + offset) - drawnAt;
+				ageCount++;
+			}
 			lastFrameAt = System.currentTimeMillis();
 			int base = (int) (HEADER + slot * SLOT_BYTES);
 			var enc = RenderSystem.getDevice().createCommandEncoder();
@@ -163,6 +170,30 @@ public final class UkFrame {
 	/** This frame waited for ULTRAKILL instead of Minecraft's own frame limit. */
 	public static boolean locked;
 	private static long lockFrames, lockWaitNs, lockTimeouts, lockStatsAt;
+	/** How old ULTRAKILL's frames were when they came in (summed, counted), for the stats line. */
+	private static long ageSumUs, ageCount;
+	/** ULTRAKILL's clock (microseconds) minus ours, from CLOCK pings; MIN_VALUE until known. */
+	private static volatile long clockOffsetUs = Long.MIN_VALUE;
+	private static long nextClockPing;
+
+	/** Every few seconds: our clock to ULTRAKILL (CLOCK sent), which answers at once with its own. */
+	private static void pingClock() {
+		long now = System.nanoTime() / 1000L;
+		if (now < nextClockPing) return;
+		nextClockPing = now + 5_000_000L;
+		UkLink.send("CLOCK " + now);
+	}
+
+	/** CLOCK sent ukNow (on the link's thread, as it arrives): the offset, if the round trip was quick. */
+	static void clockReply(String line) {
+		String[] a = line.split(" ");
+		if (a.length < 3) return;
+		long sent = Long.parseLong(a[1]), uk = Long.parseLong(a[2]), back = System.nanoTime() / 1000L;
+		if (back - sent > 2000) return;
+		long offset = uk - (sent + back) / 2;
+		long was = clockOffsetUs;
+		clockOffsetUs = was == Long.MIN_VALUE ? offset : (was * 3 + offset) / 4;
+	}
 
 	/**
 	 * After Minecraft shows a frame: wait for ULTRAKILL's next one before starting the next, instead of Minecraft's own
@@ -174,6 +205,7 @@ public final class UkFrame {
 		locked = false;
 		if (color == null || map == null || !fresh() || !(Ultracraft.active || Ultracraft.steveDrawn)) return;
 		locked = true;
+		pingClock();
 		long start = System.nanoTime();
 		long deadline = start + (long) (1.5e9 / Math.max(30, UltracraftConfig.ukFpsNow()));
 		long nextPoll = start + 1_000_000L;
@@ -193,15 +225,19 @@ public final class UkFrame {
 			}
 			Thread.onSpinWait();
 		}
+		// the input for ULTRAKILL's next frame, while it's between frames
+		Ultracraft.sendInputEarly();
 		long end = System.nanoTime();
 		lockFrames++;
 		lockWaitNs += end - start;
 		if (lockStatsAt == 0) lockStatsAt = end;
 		if (end - lockStatsAt > 30_000_000_000L) {
 			double secs = (end - lockStatsAt) / 1e9;
-			LOG.info(String.format(java.util.Locale.ROOT, "[frames] %.0f fps in lock step with ULTRAKILL (cap %d), waited %.1f ms a frame, %d late",
-				lockFrames / secs, UltracraftConfig.ukFpsNow(), lockWaitNs / 1e6 / lockFrames, lockTimeouts));
+			LOG.info(String.format(java.util.Locale.ROOT, "[frames] %.0f fps in lock step with ULTRAKILL (cap %d), waited %.1f ms a frame, %d late, frames %.1f ms old%s",
+				lockFrames / secs, UltracraftConfig.ukFpsNow(), lockWaitNs / 1e6 / lockFrames, lockTimeouts, ageCount > 0 ? ageSumUs / 1000.0 / ageCount : -1.0,
+				UltracraftConfig.lowLatency ? " (low latency)" : ""));
 			lockFrames = lockWaitNs = lockTimeouts = 0;
+			ageSumUs = ageCount = 0;
 			lockStatsAt = end;
 		}
 	}

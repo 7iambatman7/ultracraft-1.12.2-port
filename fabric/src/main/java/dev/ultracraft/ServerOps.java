@@ -40,6 +40,12 @@ public final class ServerOps {
 	/** What the server knows of each V1's player beyond their entity. */
 	static final class State {
 		boolean playing, shopTouch;
+		/** ULTRAKILL's style rank (STYLE) and the streak of kills at S and up (StyleRewards). */
+		int rank, streak;
+		/** Cheats on the server's side: Never Hungry, Infinite P (the Upgrades page takes nothing). */
+		boolean neverHungry, infiniteP;
+		/** When an arena last told this player about itself (game time). */
+		long arenaNoticeAt;
 		/** The stand-ins of this player's ULTRAKILL's enemies, by that ULTRAKILL's id. */
 		final Map<Integer, UkEnemyEntity> enemies = new HashMap<>();
 	}
@@ -66,10 +72,16 @@ public final class ServerOps {
 	static void tick(MinecraftServer server) {
 		ticks++;
 		for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
-			if (!UcNet.isV1(sp)) continue;
 			State s = state(sp);
+			// the Never Hungry cheat (as Steve too)
+			if (s.neverHungry && ticks % 20 == 0) {
+				sp.getFoodData().setFoodLevel(20);
+				sp.getFoodData().setSaturation(5f);
+			}
+			if (!UcNet.isV1(sp)) continue;
 			if (ticks % 40 == 0 && !UkBosses.busy()) guard("spawns", () -> UkSpawns.tick(sp));
 			if (ticks % 10 == 0) guard("bosses", () -> UkBosses.tick(sp, s.playing));
+			if (ticks % 20 == 5) guard("arenas", () -> Arenas.tick(sp));
 			if (ticks % 10 == 0 && CyberGrind.running && CyberGrind.isRunner(sp)) guard("cyber grind", () -> CyberGrind.tick(sp));
 		}
 		if (ticks % 20 == 0) {
@@ -98,6 +110,12 @@ public final class ServerOps {
 	static void reset() {
 		STATES.clear();
 		UcNet.clearServer();
+	}
+
+	/** Cheats are allowed for this player: in their own world (singleplayer, or the one they host), or as an operator. */
+	static boolean cheatsAllowed(ServerPlayer sp) {
+		MinecraftServer server = sp.level().getServer();
+		return server.isSingleplayerOwner(sp.nameAndId()) || sp.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER);
 	}
 
 	/** One line from a player (their ULTRAKILL's, or their Minecraft side's). */
@@ -147,6 +165,15 @@ public final class ServerOps {
 				if (dmg > 0 && sp.isAlive() && !UcNet.isV1(sp)) sp.hurtServer(sp.level(), sp.damageSources().generic(), dmg);
 			}
 			case "PLAYING" -> state(sp).playing = rest.trim().equals("1");
+			case "CHEATSRV" -> {
+				// CHEATSRV id 0/1: a cheat with a server side (only in the player's own world, or for operators)
+				boolean on = a.length > 2 && a[2].equals("1") && cheatsAllowed(sp);
+				State st = state(sp);
+				if (a[1].equals("ultracraft.never-hungry")) st.neverHungry = on;
+				else if (a[1].equals("ultracraft.infinite-p")) st.infiniteP = on;
+			}
+			case "NOSPAWN" -> UkSpawns.missing(rest.trim());
+			case "STYLE" -> StyleRewards.rank(sp, Integer.parseInt(rest.trim()));
 			case "SHOP" -> state(sp).shopTouch = rest.trim().equals("1");
 			case "PROGRESS" -> {
 				UkProgress.get(sp).send();
@@ -290,9 +317,11 @@ public final class ServerOps {
 				if (a.length >= 3) UkProgress.get(sp).setEquip(a[1], Integer.parseInt(a[2].trim()));
 			}
 			case "UPBUY" -> {
-				String key = rest.trim();
+				// UPBUY key [free]: free with the Infinite P cheat
+				String key = a[1];
 				UkProgress p = UkProgress.get(sp);
-				if (p.buyUpgrade(key)) {
+				boolean free = a.length > 2 && a[2].equals("free") && state(sp).infiniteP && cheatsAllowed(sp);
+				if (p.buyUpgrade(key, free)) {
 					sp.sendSystemMessage(Component.literal("[Ultracraft] " + UkUpgrades.name(key) + " upgraded to level " + p.level(key) + " of "
 						+ UkUpgrades.TRACKS.get(key).max() + ".").withStyle(net.minecraft.ChatFormatting.GOLD));
 				}
@@ -314,7 +343,7 @@ public final class ServerOps {
 				// UKDEAD type x y z rank grind: one of this player's ULTRAKILL's enemies died: its experience drops there
 				Vec3 at = new Vec3(Double.parseDouble(a[2]), Double.parseDouble(a[3]), Double.parseDouble(a[4]));
 				int rank = a.length > 5 ? Integer.parseInt(a[5]) : 0;
-				UkSpawns.died(level, a[1], at, rank);
+				UkSpawns.died(sp, level, a[1], at, rank);
 				if (a.length > 6 && a[6].equals("1")) CyberGrind.died(sp);
 			}
 			default -> {
@@ -348,7 +377,12 @@ public final class ServerOps {
 			le.push(away.x * 1.6, 0.6, away.z * 1.6);
 			le.hurtMarked = true;
 		}
-		if (!le.isAlive()) UcNet.send(sp, "KILL " + id);
+		if (!le.isAlive()) {
+			UcNet.send(sp, "KILL " + id);
+			// style pays for Minecraft's mobs too
+			float worth = StyleRewards.kill(sp, le.position().add(0, le.getBbHeight() * 0.5, 0));
+			if (worth > 1f) net.minecraft.world.entity.ExperienceOrb.award(level, le.position(), Math.round(5f * (worth - 1f)) + 2);
+		}
 	}
 
 	// ------------------------------------------------------------------ Minecraft's projectiles and parries

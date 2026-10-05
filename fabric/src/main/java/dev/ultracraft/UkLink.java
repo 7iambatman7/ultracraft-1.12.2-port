@@ -51,6 +51,8 @@ public final class UkLink {
 				while ((line = in.readLine()) != null) {
 					if (line.startsWith("P ")) {
 						parsePose(line);
+					} else if (line.startsWith("CLOCK ")) {
+						UkFrame.clockReply(line);
 					} else if (line.startsWith("HP ")) {
 						String[] a = line.split(" ");
 						hp = Integer.parseInt(a[1]);

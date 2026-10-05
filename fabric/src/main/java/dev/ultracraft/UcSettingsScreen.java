@@ -11,7 +11,9 @@ import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
 import net.minecraft.client.Options;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -20,9 +22,9 @@ import net.minecraft.client.gui.screens.options.OptionsSubScreen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Ultracraft's settings: which enemies come (Minecraft's monsters, ULTRAKILL's, its bosses), what breaks blocks, how
- * long impact frames last, and ULTRAKILL's own settings (sensitivity, field of view, screen shake...) as Ultracraft
- * plays it. Opened with the "Ultracraft" button on the pause menu, the title screen and Minecraft's Options.
+ * Ultracraft's settings, by category: enemies and bosses, gameplay, the shop and rewards, performance, music, cheats,
+ * ULTRAKILL's own settings (sensitivity, field of view, screen shake...) as Ultracraft plays it, and its controls.
+ * Opened with the "Ultracraft" button on the pause menu, the title screen and Minecraft's Options.
  */
 public final class UcSettingsScreen extends OptionsSubScreen {
 	/** One of ULTRAKILL's settings: its pref name, its type (f float, i int, b bool) and its default. */
@@ -38,7 +40,10 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 		new UkPref("mouseReverseY", 'b', "Invert Mouse Y", "false", 0, 1, "Mouse up looks down."),
 		new UkPref("bloodEnabled", 'b', "Blood", "true", 0, 1, "ULTRAKILL's blood (it still heals V1 with this off)."),
 		new UkPref("allVolume", 'f', "ULTRAKILL Volume", "1", 0, 100, "The volume of everything ULTRAKILL plays."),
-		new UkPref("musicVolume", 'f', "ULTRAKILL Music", "0.6", 0, 100, "ULTRAKILL's music (boss fights, the Cyber Grind)."));
+		new UkPref("musicVolume", 'f', "ULTRAKILL Music", "0.6", 0, 100, "ULTRAKILL's music (fights, bosses, the Cyber Grind)."));
+
+	/** The ones on the Music page rather than ULTRAKILL Settings. */
+	private static final List<String> VOLUMES = List.of("allVolume", "musicVolume");
 
 	/** What ULTRAKILL said its settings are (UKPREFS), for the ones Ultracraft hasn't set itself. */
 	static final Map<String, String> reported = new HashMap<>();
@@ -56,7 +61,7 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 			}
 			if (screen instanceof PauseScreen || screen instanceof OptionsScreen || screen instanceof TitleScreen) {
 				Screens.getButtons(screen).add(Button.builder(Component.literal("Ultracraft..."), b -> mc.setScreen(new UcSettingsScreen(screen)))
-					.bounds(4, 4, 90, 20).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Ultracraft and ULTRAKILL settings"))).build());
+					.bounds(4, 4, 90, 20).tooltip(Tooltip.create(Component.literal("Ultracraft and ULTRAKILL settings"))).build());
 			}
 		});
 	}
@@ -71,41 +76,35 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 
 	@Override
 	protected void addOptions() {
-		list.addSmall(
-			bool("Minecraft Mobs", "Minecraft's monsters spawn. Bosses (the Ender Dragon, the Wither, Elder Guardians, the Warden) always do.",
-				UltracraftConfig.mcMobs, v -> UltracraftConfig.mcMobs = v),
-			bool("ULTRAKILL Enemies", "ULTRAKILL's enemies spawn in the dark, like Minecraft's monsters. Its bosses and the Cyber Grind still come.",
-				UltracraftConfig.ukSpawns, v -> {
-					UltracraftConfig.ukSpawns = v;
-					CyberGrind.sendState();
-				}),
-			bool("ULTRAKILL Bosses", "ULTRAKILL's bosses come for V1 now and then, with a warning first.", UltracraftConfig.bosses, v -> UltracraftConfig.bosses = v),
-			bool("ULTRAKILL While Steve", "Back as Steve (F8), ULTRAKILL's enemies stay and keep fighting: you see them, and they come for Steve. Off: they wait, frozen, until you're V1 again.",
-				UltracraftConfig.steveEnemies, v -> UltracraftConfig.steveEnemies = v),
-			bool("Become V1 Automatically", "Become V1 as soon as ULTRAKILL is ready (otherwise F8).", UltracraftConfig.autoV1, v -> UltracraftConfig.autoV1 = v),
-			bool("V1 Breaks Blocks", "V1's guns, punches, slams and blasts break blocks.", UltracraftConfig.playerBlockDamage, v -> UltracraftConfig.playerBlockDamage = v),
-			bool("Enemies Break Blocks", "ULTRAKILL's enemies' shots, beams, blasts and fire break blocks.", UltracraftConfig.enemyBlockDamage,
-				v -> UltracraftConfig.enemyBlockDamage = v),
-			slider("Impact Frames", "How long ULTRAKILL's impact frames (the freeze on big hits) last: 0.1x to 3x.", 1, 30, Math.round(UltracraftConfig.impactFrames * 10f),
-				v -> String.format(Locale.ROOT, "%.1fx", v / 10f), v -> UltracraftConfig.impactFrames = v / 10f),
-			slider("ULTRAKILL Resolution", "How tall ULTRAKILL draws its picture (scaled up to fill the window). Lower = much faster; this is the biggest frame rate setting.",
-				0, 6, resIndex(), v -> RES_NAMES[v], v -> UltracraftConfig.v1Height = RES[v]),
-			slider("ULTRAKILL FPS Cap", "How many frames a second ULTRAKILL draws. Match Minecraft (the far left) keeps it in step with Minecraft's own frame limit, the smoothest. It shares the graphics card with Minecraft: a lower cap leaves Minecraft more.",
-				2, 24, UltracraftConfig.ukFps == 0 ? 2 : UltracraftConfig.ukFps / 10, v -> v == 2 ? "Match Minecraft" : v * 10 + " FPS",
-				v -> UltracraftConfig.ukFps = v == 2 ? 0 : v * 10),
-			bool("OP Shop", "The shop's Upgrades page goes much further: every weapon's and arm's Power up to 1500%, and blast sizes (Payload, Shockwave, the mini nuke) up to 1500%.",
-				UltracraftConfig.opShop, v -> {
-					UltracraftConfig.opShop = v;
-					resendUpgrades();
-				}),
-			bool("Sharp Shop Screen", "Using a shop, ULTRAKILL draws at full resolution so the text is sharp (costs frames while you use it).",
-				UltracraftConfig.sharpShop, v -> UltracraftConfig.sharpShop = v),
-			bool("Start ULTRAKILL", "Starting Minecraft starts ULTRAKILL too (through Steam), and closing Minecraft closes it.", UltracraftConfig.launchUltrakill,
-				v -> UltracraftConfig.launchUltrakill = v));
-		list.addSmall(Button.builder(Component.literal("ULTRAKILL Controls..."), b -> minecraft.setScreen(new UcKeybindsScreen(this))).width(150).build(), null);
-		List<OptionInstance<?>> uk = new ArrayList<>();
-		for (UkPref p : UK_PREFS) uk.add(ukOption(p));
-		list.addSmall(uk.toArray(new OptionInstance[0]));
+		list.addSmall(open("Enemies & Bosses", "Which enemies come, ULTRAKILL's bosses and arenas.", UcSettingsScreen::enemies),
+			open("Gameplay", "Becoming V1, what breaks blocks, impact frames.", UcSettingsScreen::gameplay));
+		list.addSmall(open("Shop & Rewards", "The OP Shop, the shop's screen, style rewards.", UcSettingsScreen::shop),
+			open("Performance", "ULTRAKILL's resolution and frame rate.", UcSettingsScreen::performance));
+		list.addSmall(open("Music", "ULTRAKILL's music in fights: which song, boss themes, volumes.", UcSettingsScreen::music),
+			open("Cheats", "ULTRAKILL's Sandbox cheats and a few of Ultracraft's.", UcCheats::fill));
+		list.addSmall(open("ULTRAKILL Settings", "Sensitivity, field of view, screen shake... as Ultracraft plays it (ULTRAKILL's own settings stay as they are).",
+			UcSettingsScreen::ukSettings), Button.builder(Component.literal("ULTRAKILL Controls..."), b -> minecraft.setScreen(new UcKeybindsScreen(this)))
+			.tooltip(Tooltip.create(Component.literal("Rebind ULTRAKILL's keys."))).build());
+	}
+
+	/** Debug: a category's page by its short name. */
+	static Screen page(String name) {
+		UcSettingsScreen root = new UcSettingsScreen(null);
+		return switch (name) {
+			case "enemies" -> new Category(root, "Enemies & Bosses", UcSettingsScreen::enemies);
+			case "gameplay" -> new Category(root, "Gameplay", UcSettingsScreen::gameplay);
+			case "shop" -> new Category(root, "Shop & Rewards", UcSettingsScreen::shop);
+			case "performance" -> new Category(root, "Performance", UcSettingsScreen::performance);
+			case "music" -> new Category(root, "Music", UcSettingsScreen::music);
+			case "cheats" -> new Category(root, "Cheats", UcCheats::fill);
+			case "uk" -> new Category(root, "ULTRAKILL Settings", UcSettingsScreen::ukSettings);
+			default -> root;
+		};
+	}
+
+	private Button open(String name, String tooltip, Consumer<Category> fill) {
+		return Button.builder(Component.literal(name + "..."), b -> minecraft.setScreen(new Category(this, name, fill)))
+			.tooltip(Tooltip.create(Component.literal(tooltip))).build();
 	}
 
 	@Override
@@ -113,6 +112,121 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 		super.removed();
 		UltracraftConfig.save();
 	}
+
+	/** One category's page. */
+	static final class Category extends OptionsSubScreen {
+		private final Consumer<Category> fill;
+
+		Category(Screen last, String name, Consumer<Category> fill) {
+			super(last, Minecraft.getInstance().options, Component.literal(name));
+			this.fill = fill;
+		}
+
+		@Override
+		protected void addOptions() {
+			fill.accept(this);
+		}
+
+		void add(OptionInstance<?>... options) {
+			list.addSmall(options);
+		}
+
+		void add(AbstractWidget a, AbstractWidget b) {
+			list.addSmall(a, b);
+		}
+
+		void header(String text) {
+			list.addHeader(Component.literal(text));
+		}
+
+		Screen self() {
+			return this;
+		}
+
+		@Override
+		public void removed() {
+			super.removed();
+			UltracraftConfig.save();
+		}
+	}
+
+	// ------------------------------------------------------------------ the categories
+
+	private static void enemies(Category c) {
+		c.add(bool("Minecraft Mobs", "Minecraft's monsters spawn. Bosses (the Ender Dragon, the Wither, Elder Guardians, the Warden) always do.",
+				UltracraftConfig.mcMobs, v -> UltracraftConfig.mcMobs = v),
+			bool("ULTRAKILL Enemies", "ULTRAKILL's enemies spawn in the dark, like Minecraft's monsters: which ones depends on the biome and the dimension. Its bosses and the Cyber Grind still come.",
+				UltracraftConfig.ukSpawns, v -> {
+					UltracraftConfig.ukSpawns = v;
+					CyberGrind.sendState();
+				}),
+			bool("ULTRAKILL Bosses", "ULTRAKILL's bosses come for V1 now and then, with a warning first.", UltracraftConfig.bosses, v -> UltracraftConfig.bosses = v),
+			slider("Time Between Bosses", "About how many minutes of play pass between bosses.", 5, 60, UltracraftConfig.bossMinutes, v -> v + " min",
+				v -> UltracraftConfig.bossMinutes = v),
+			bool("ULTRAKILL Arenas", "Arenas themed after ULTRAKILL's layers of Hell generate in new parts of the world, each with a boss waiting inside.",
+				UltracraftConfig.arenas, v -> UltracraftConfig.arenas = v),
+			bool("ULTRAKILL While Steve", "Back as Steve (F8), ULTRAKILL's enemies stay and keep fighting: you see them, and they come for Steve. Off: they wait, frozen, until you're V1 again.",
+				UltracraftConfig.steveEnemies, v -> UltracraftConfig.steveEnemies = v));
+	}
+
+	private static void gameplay(Category c) {
+		c.add(bool("Become V1 Automatically", "Become V1 as soon as ULTRAKILL is ready (otherwise F8).", UltracraftConfig.autoV1, v -> UltracraftConfig.autoV1 = v),
+			bool("V1 Breaks Blocks", "V1's guns, punches, slams and blasts break blocks.", UltracraftConfig.playerBlockDamage, v -> UltracraftConfig.playerBlockDamage = v),
+			bool("Enemies Break Blocks", "ULTRAKILL's enemies' shots, beams, blasts and fire break blocks.", UltracraftConfig.enemyBlockDamage,
+				v -> UltracraftConfig.enemyBlockDamage = v),
+			slider("Impact Frames", "How long ULTRAKILL's impact frames (the freeze on big hits) last: 0.1x to 3x.", 1, 30, Math.round(UltracraftConfig.impactFrames * 10f),
+				v -> String.format(Locale.ROOT, "%.1fx", v / 10f), v -> UltracraftConfig.impactFrames = v / 10f),
+			bool("Start ULTRAKILL", "Starting Minecraft starts ULTRAKILL too (through Steam), and closing Minecraft closes it.", UltracraftConfig.launchUltrakill,
+				v -> UltracraftConfig.launchUltrakill = v));
+	}
+
+	private static void shop(Category c) {
+		c.add(bool("Style Rewards", "Kills at ULTRAKILL's top style ranks (S and up) pay extra experience and loot, and a streak of them pays more: diamonds and golden apples at SSS, netherite at ULTRAKILL.",
+				UltracraftConfig.styleRewards, v -> UltracraftConfig.styleRewards = v),
+			bool("OP Shop", "The shop's Upgrades page goes much further: every weapon's and arm's Power up to 1500%, and blast sizes (Payload, Shockwave, the mini nuke) up to 1500%.",
+				UltracraftConfig.opShop, v -> {
+					UltracraftConfig.opShop = v;
+					resendUpgrades();
+				}),
+			bool("Sharp Shop Screen", "Using a shop, ULTRAKILL draws at full resolution so the text is sharp (costs frames while you use it).",
+				UltracraftConfig.sharpShop, v -> UltracraftConfig.sharpShop = v));
+	}
+
+	private static void performance(Category c) {
+		c.add(slider("ULTRAKILL Resolution", "How tall ULTRAKILL draws its picture (scaled up to fill the window). Lower = much faster; this is the biggest frame rate setting.",
+				0, 6, resIndex(), v -> RES_NAMES[v], v -> UltracraftConfig.v1Height = RES[v]),
+			slider("ULTRAKILL FPS Cap", "How many frames a second ULTRAKILL draws. Match Minecraft (the far left) keeps it in step with Minecraft's own frame limit, the smoothest. It shares the graphics card with Minecraft: a lower cap leaves Minecraft more.",
+				2, 24, UltracraftConfig.ukFps == 0 ? 2 : UltracraftConfig.ukFps / 10, v -> v == 2 ? "Match Minecraft" : v * 10 + " FPS",
+				v -> UltracraftConfig.ukFps = v == 2 ? 0 : v * 10),
+			bool("Low-Latency Frames", "ULTRAKILL hands each frame to Minecraft as soon as it's drawn, rather than a frame or two later: less input lag. On a slow graphics card, off may give a few more frames a second.",
+				UltracraftConfig.lowLatency, v -> UltracraftConfig.lowLatency = v));
+	}
+
+	private static void music(Category c) {
+		c.add(Button.builder(Component.literal("Fight Music: " + UcMusicScreen.current()), b -> Minecraft.getInstance().setScreen(new UcMusicScreen(c.self())))
+				.tooltip(Tooltip.create(Component.literal("Which ULTRAKILL song plays in fights: off, a random one each fight, or one from its soundtrack."))).build(),
+			null);
+		c.add(bool("Boss Themes", "Bosses and arenas bring their own ULTRAKILL song where they have one (V2: Versus, Minos Prime: Order...).",
+				UltracraftConfig.bossThemes, v -> UltracraftConfig.bossThemes = v),
+			bool("Calm Music", "Between fights the song's calm version plays softly, as in ULTRAKILL's levels. Off: ULTRAKILL's music only plays in fights.",
+				UltracraftConfig.calmMusic, v -> {
+					UltracraftConfig.calmMusic = v;
+					UltracraftConfig.sendMusic();
+				}),
+			bool("Hush Minecraft's Music", "Minecraft's own music pauses while ULTRAKILL's fight music plays.", UltracraftConfig.hushMcMusic,
+				v -> UltracraftConfig.hushMcMusic = v));
+		List<OptionInstance<?>> volumes = new ArrayList<>();
+		for (UkPref p : UK_PREFS) if (VOLUMES.contains(p.key)) volumes.add(ukOption(p));
+		c.add(volumes.toArray(new OptionInstance[0]));
+	}
+
+	private static void ukSettings(Category c) {
+		List<OptionInstance<?>> uk = new ArrayList<>();
+		for (UkPref p : UK_PREFS) if (!VOLUMES.contains(p.key)) uk.add(ukOption(p));
+		c.add(uk.toArray(new OptionInstance[0]));
+	}
+
+	// ------------------------------------------------------------------ helpers
 
 	private static final int[] RES = {360, 480, 540, 720, 900, 1080, 0};
 	private static final String[] RES_NAMES = {"360p", "480p", "540p", "720p", "900p", "1080p", "Full"};
@@ -131,17 +245,17 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 		});
 	}
 
-	private static OptionInstance<Boolean> bool(String caption, String tooltip, boolean value, Consumer<Boolean> set) {
+	static OptionInstance<Boolean> bool(String caption, String tooltip, boolean value, Consumer<Boolean> set) {
 		return OptionInstance.createBoolean(caption, OptionInstance.cachedConstantTooltip(Component.literal(tooltip)), value, v -> {
 			set.accept(v);
 			UltracraftConfig.sendOpts();
 		});
 	}
 
-	private static OptionInstance<Integer> slider(String caption, String tooltip, int min, int max, int value, java.util.function.IntFunction<String> label,
+	static OptionInstance<Integer> slider(String caption, String tooltip, int min, int max, int value, java.util.function.IntFunction<String> label,
 			Consumer<Integer> set) {
 		return new OptionInstance<>(caption, OptionInstance.cachedConstantTooltip(Component.literal(tooltip)),
-			(c, v) -> Options.genericValueLabel(c, Component.literal(label.apply(v))), new OptionInstance.IntRange(min, max), Math.max(min, Math.min(max, value)), v -> {
+			(cap, v) -> Options.genericValueLabel(cap, Component.literal(label.apply(v))), new OptionInstance.IntRange(min, max), Math.max(min, Math.min(max, value)), v -> {
 				set.accept(v);
 				UltracraftConfig.sendOpts();
 			});

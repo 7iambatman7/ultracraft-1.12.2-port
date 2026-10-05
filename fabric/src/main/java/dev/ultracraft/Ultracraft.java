@@ -200,9 +200,24 @@ public final class Ultracraft implements ClientModInitializer {
 
 	// ------------------------------------------------------------------ per frame
 
+	/** This frame's input already went to ULTRAKILL, the moment its last frame came in (UkFrame.waitForNext). */
+	static boolean inputSentEarly;
+
+	/**
+	 * The input, as early as it can go: right when ULTRAKILL's frame arrives, ULTRAKILL is between frames, so input
+	 * sent now is in its very next frame (sent later, while it's already drawing, it would wait a frame more).
+	 */
+	static void sendInputEarly() {
+		Minecraft mc = Minecraft.getInstance();
+		if (!UkLink.connected || mc.getWindow() == null) return;
+		sendInput(mc);
+		inputSentEarly = true;
+	}
+
 	private static void renderV1(GuiGraphics ctx) {
 		Minecraft mc = Minecraft.getInstance();
-		if (UkLink.connected) sendInput(mc);
+		if (UkLink.connected && !inputSentEarly) sendInput(mc);
+		inputSentEarly = false;
 		if (!active && steveView) {
 			// Steve with ULTRAKILL's enemies about: its layer, drawn from Steve's camera, over Minecraft's world
 			sendMobsDrawn(mc);
@@ -621,6 +636,7 @@ public final class Ultracraft implements ClientModInitializer {
 	private static void handle(Minecraft mc, String msg) {
 		if (msg.equals("READY") && mc.player != null && mc.player.connection != null) {
 			mc.gui.getChat().addMessage(net.minecraft.network.chat.Component.literal("[Ultracraft] ULTRAKILL is ready. Press F8 to become V1."));
+			UcCheats.sendServer();
 		} else if (msg.equals("CONNECTED")) {
 			// a (re)started ULTRAKILL needs our window size again, and whether we're paused
 			lastW = -1;
@@ -632,6 +648,7 @@ public final class Ultracraft implements ClientModInitializer {
 			ShopExport.reset();
 			Weather.reset();
 			UcNet.toServer("PROGRESS");
+			UcCheats.sendServer();
 		} else if (msg.equals("DISCONNECTED")) {
 			active = false;
 			autoPending = true;
@@ -643,7 +660,7 @@ public final class Ultracraft implements ClientModInitializer {
 			UcNet.toServer(msg);
 		} else if (msg.startsWith("UI ")) {
 			setUiMode(mc, msg.endsWith("1"));
-		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED) .*")) {
+		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED|SPAWNABLES|MUSICINFO) .*")) {
 			// debug answers (DebugCommands "uk ...")
 			org.slf4j.LoggerFactory.getLogger("ultracraft").info("[uk] {}", msg);
 		} else if (msg.startsWith("SHOPZONE ")) {
@@ -653,6 +670,10 @@ public final class Ultracraft implements ClientModInitializer {
 			if (touch != shopTouch) UcNet.toServer("SHOP " + (touch ? 1 : 0));
 			shopTouch = touch;
 			shopNear = a.length > 2 && a[2].equals("1");
+		} else if (msg.startsWith("SONGS ")) {
+			UcMusicScreen.songs(msg.substring(6));
+		} else if (msg.startsWith("FIGHT ")) {
+			UcThemes.fight(mc, msg.endsWith("1"));
 		} else if (msg.startsWith("STAINS ")) {
 			BloodStains.add(mc.level, msg.substring(7));
 		} else if (msg.equals("STAINCLEAR")) {
@@ -671,7 +692,7 @@ public final class Ultracraft implements ClientModInitializer {
 
 	/** ULTRAKILL's messages that act on the world, handled by the server (ServerOps). */
 	private static final java.util.regex.Pattern SERVER_OPS = java.util.regex.Pattern.compile(
-		"^(SLAM|RAIL|BOOM|HIT|FIRE|DMG|PIMPACT|PHOLD|PRELEASE|PARRY|PEARN|PADD|GEARADD|UPBUY|BOSSPOS|BOSSDEAD|BOSSGONE|GRIND|SPAWNS|UKDEAD|UKDIE|PHIT|SHURT|EQUIP) ");
+		"^(SLAM|RAIL|BOOM|HIT|FIRE|DMG|PIMPACT|PHOLD|PRELEASE|PARRY|PEARN|PADD|GEARADD|UPBUY|BOSSPOS|BOSSDEAD|BOSSGONE|GRIND|SPAWNS|UKDEAD|UKDIE|PHIT|SHURT|EQUIP|NOSPAWN|STYLE) ");
 
 	/** A line from the server for our Minecraft side ("C:..." in UcNet), on the client thread. */
 	static void fromServer(String msg) {
@@ -679,6 +700,8 @@ public final class Ultracraft implements ClientModInitializer {
 			UcNet.clientV1s(msg.substring(4));
 		} else if (msg.startsWith("PGAIN ")) {
 			UkProgress.gained(Integer.parseInt(msg.substring(6).trim()));
+		} else if (msg.startsWith("THEME ")) {
+			UcThemes.theme(msg.substring(6).trim());
 		}
 	}
 

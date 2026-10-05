@@ -63,16 +63,34 @@ public final class UltracraftConfig {
 	public static final Map<String, String> ukPrefs = new TreeMap<>();
 	/** ULTRAKILL's controls rebound (UcKeybindsScreen): action -> GLFW key, or -1 - mouse button. */
 	public static final Map<String, Integer> ukBinds = new TreeMap<>();
+	/** The ULTRAKILL song for fights: "off", "random", or a song of its soundtrack ("Levels/Act 1/Limbo/Versus.asset"). */
+	public static String fightMusic = "random";
+	/** Bosses (and arenas) bring their own ULTRAKILL song where they have one. */
+	public static boolean bossThemes = true;
+	/** Between fights the song's calm version plays (where ULTRAKILL has one); otherwise ULTRAKILL's music is quiet. */
+	public static boolean calmMusic = false;
+	/** Minecraft's own music pauses while ULTRAKILL's fight music plays. */
+	public static boolean hushMcMusic = true;
+	/** Kills at the top style ranks pay extra: experience, loot, and more for a streak of them. */
+	public static boolean styleRewards = true;
+	/** ULTRAKILL arenas generate in new parts of the world, each with a boss waiting. */
+	public static boolean arenas = true;
+	/** Low-Latency Frames: ULTRAKILL hands each frame over as soon as it's drawn (less delay, a little less throughput). */
+	public static boolean lowLatency = true;
+	/** Cheats (UcCheats) switched on: id -> on. */
+	public static final Map<String, Boolean> cheats = new TreeMap<>();
 
 	private static final String[] KEYS = {"v1Height", "autoV1", "ukSpawns", "mcMobs", "sharpShop", "grindBest", "bosses", "bossMinutes", "bossWarnSeconds",
-		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFpsCap", "steveEnemies"};
+		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFpsCap", "steveEnemies", "fightMusic", "bossThemes",
+		"calmMusic", "hushMcMusic", "styleRewards", "arenas", "lowLatency"};
 
 	private static final String COMMENT = "Ultracraft (most of this is on the Ultracraft settings screen): v1Height = ULTRAKILL render height (0 = full window, lower = faster);"
 		+ " autoV1 = become V1 automatically; ukSpawns = ULTRAKILL's enemies spawn in the dark; mcMobs = Minecraft's monsters spawn;"
 		+ " sharpShop = full resolution at a shop's screen; grindBest = best Cyber Grind wave; bosses = ULTRAKILL's bosses come now and then;"
 		+ " bossMinutes = minutes of play between them; bossWarnSeconds = warning before one arrives; allGear = every weapon without buying it;"
 		+ " playerBlockDamage / enemyBlockDamage = V1's / enemies' attacks break blocks; impactFrames = hitstop length (0.1 to 3);"
-		+ " launchUltrakill = start ULTRAKILL with Minecraft; opShop = upgrades go to 1500%; uk.* = ULTRAKILL settings used while playing Ultracraft";
+		+ " launchUltrakill = start ULTRAKILL with Minecraft; opShop = upgrades go to 1500%; uk.* = ULTRAKILL settings used while playing Ultracraft;"
+		+ " fightMusic = off, random or a song of ULTRAKILL's soundtrack; cheat.* = cheats on; arenas = ULTRAKILL arenas generate in new chunks";
 
 	private UltracraftConfig() {}
 
@@ -128,10 +146,18 @@ public final class UltracraftConfig {
 			// (ukFps was a plain cap, 120 by default: ukFpsCap starts again at "match Minecraft")
 			ukFps = Integer.parseInt(p.getProperty("ukFpsCap", Integer.toString(ukFps)).trim());
 			if (ukFps != 0) ukFps = Math.max(30, Math.min(240, ukFps));
+			fightMusic = p.getProperty("fightMusic", fightMusic).trim();
+			bossThemes = bool(p, "bossThemes", bossThemes);
+			calmMusic = bool(p, "calmMusic", calmMusic);
+			hushMcMusic = bool(p, "hushMcMusic", hushMcMusic);
+			styleRewards = bool(p, "styleRewards", styleRewards);
+			arenas = bool(p, "arenas", arenas);
+			lowLatency = bool(p, "lowLatency", lowLatency);
 			ukPrefs.clear();
 			for (String k : p.stringPropertyNames()) {
 				if (k.startsWith("uk.")) ukPrefs.put(k.substring(3), p.getProperty(k).trim());
 				if (k.startsWith("bind.")) ukBinds.put(k.substring(5), Integer.parseInt(p.getProperty(k).trim()));
+				if (k.startsWith("cheat.")) cheats.put(k.substring(6), Boolean.parseBoolean(p.getProperty(k).trim()));
 			}
 			if (!complete) save();
 		} catch (Exception e) {
@@ -163,6 +189,14 @@ public final class UltracraftConfig {
 		p.setProperty("opShop", Boolean.toString(opShop));
 		p.setProperty("steveEnemies", Boolean.toString(steveEnemies));
 		p.setProperty("ukFpsCap", Integer.toString(ukFps));
+		p.setProperty("fightMusic", fightMusic);
+		p.setProperty("bossThemes", Boolean.toString(bossThemes));
+		p.setProperty("calmMusic", Boolean.toString(calmMusic));
+		p.setProperty("hushMcMusic", Boolean.toString(hushMcMusic));
+		p.setProperty("styleRewards", Boolean.toString(styleRewards));
+		p.setProperty("arenas", Boolean.toString(arenas));
+		p.setProperty("lowLatency", Boolean.toString(lowLatency));
+		for (var e : cheats.entrySet()) p.setProperty("cheat." + e.getKey(), Boolean.toString(e.getValue()));
 		for (var e : ukPrefs.entrySet()) p.setProperty("uk." + e.getKey(), e.getValue());
 		for (var e : ukBinds.entrySet()) p.setProperty("bind." + e.getKey(), Integer.toString(e.getValue()));
 		try {
@@ -196,8 +230,17 @@ public final class UltracraftConfig {
 
 	/** What ULTRAKILL needs to know of these: OPTS key=value ... (sent on connecting and after every change). */
 	public static void sendOpts() {
-		UkLink.send(String.format(Locale.ROOT, "OPTS impact=%.2f fps=%d playerBlocks=%d enemyBlocks=%d", impactFrames, ukFpsNow(), playerBlockDamage ? 1 : 0, enemyBlockDamage ? 1 : 0));
+		UkLink.send(String.format(Locale.ROOT, "OPTS impact=%.2f fps=%d playerBlocks=%d enemyBlocks=%d lowlat=%d", impactFrames, ukFpsNow(), playerBlockDamage ? 1 : 0,
+			enemyBlockDamage ? 1 : 0, lowLatency ? 1 : 0));
 		for (var e : ukPrefs.entrySet()) UkLink.send("UKPREF " + e.getKey() + " " + e.getValue());
 		for (var e : ukBinds.entrySet()) UkLink.send("UKBIND " + e.getKey() + " " + e.getValue());
+		sendMusic();
+		UcCheats.sendAll();
+	}
+
+	/** The fight music, to ULTRAKILL: MUSICOPTS calm=0/1, MUSIC off|random|song key. */
+	public static void sendMusic() {
+		UkLink.send("MUSICOPTS calm=" + (calmMusic ? 1 : 0));
+		UkLink.send("MUSIC " + fightMusic);
 	}
 }

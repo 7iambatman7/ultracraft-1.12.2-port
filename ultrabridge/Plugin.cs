@@ -158,6 +158,8 @@ namespace UltraBridge
         static StreamWriter writer;
         static readonly object wlock = new object();
         public static volatile bool Connected;
+        /// <summary>Input lines (IN) received so far.</summary>
+        public static int InputCount;
 
         public static void Start(int port)
         {
@@ -177,7 +179,18 @@ namespace UltraBridge
                         Inbox.Enqueue("CONNECTED");
                         var r = new StreamReader(s, Encoding.UTF8);
                         string line;
-                        while ((line = r.ReadLine()) != null) Inbox.Enqueue(line);
+                        while ((line = r.ReadLine()) != null)
+                        {
+                            // a clock ping is answered at once, from here (Minecraft lines its clock up with the frames' stamps)
+                            if (line.StartsWith("CLOCK "))
+                            {
+                                Send(line + " " + Bridge.NowMicros());
+                                Flush();
+                                continue;
+                            }
+                            if (line.StartsWith("IN ")) System.Threading.Interlocked.Increment(ref InputCount);
+                            Inbox.Enqueue(line);
+                        }
                     }
                     catch (Exception e) { Plugin.Log.LogWarning("net: " + e.Message); }
                     Connected = false;
@@ -212,6 +225,12 @@ namespace UltraBridge
 
         /// <summary>ULTRAKILL's frame rate cap (OPTS fps; Ultracraft's settings).</summary>
         public static int FpsCap = 120;
+        /// <summary>Low-Latency Frames: each frame's readback is finished as soon as it's drawn (instead of a frame or
+        /// two later in the background), so Minecraft shows it that much sooner.</summary>
+        public static bool LowLatency = true;
+
+        /// <summary>Microseconds on Windows' performance counter (Minecraft's System.nanoTime runs on the same one).</summary>
+        internal static int NowMicros() => (int)(long)(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency * 1e6);
         public Vector3 origin; // Minecraft coordinates of the ULTRAKILL world origin
         bool originSet;
         bool levelPrepared;
@@ -331,6 +350,16 @@ namespace UltraBridge
 
         void Update()
         {
+            // Low-Latency Frames: the last frame's readback is finished now (the GPU drew it while this frame waited its
+            // turn, so this rarely waits), so Minecraft has it at once and sends its input straight back: a moment for
+            // that input, so this frame already turns with it
+            if (LowLatency && inFlight > 0 && Net.Connected)
+            {
+                int inputs = Net.InputCount;
+                AsyncGPUReadback.WaitAllRequests();
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                while (Net.InputCount == inputs && sw.ElapsedTicks < System.Diagnostics.Stopwatch.Frequency / 500) System.Threading.Thread.SpinWait(64);
+            }
             while (Net.Inbox.TryDequeue(out var line))
             {
                 try { Handle(line); }
@@ -417,6 +446,9 @@ namespace UltraBridge
                 }
                 KeepHands();
                 KeepGunOut();
+                KeepCheats();
+                UpdateMusic();
+                UpdateStyleRank();
                 UpdateFreeze();
                 UpdateDoll();
                 KeepAudio();
@@ -1491,7 +1523,7 @@ namespace UltraBridge
                 baseWalkSpeed = nm.walkSpeed;
                 baseJumpPower = nm.jumpPower;
             }
-            nm.walkSpeed = baseWalkSpeed * (1f + 0.2f * (fxSpeed + 1)) * Mathf.Max(0.1f, 1f - 0.15f * (fxSlow + 1));
+            nm.walkSpeed = baseWalkSpeed * (1f + 0.2f * (fxSpeed + 1)) * Mathf.Max(0.1f, 1f - 0.15f * (fxSlow + 1)) * (CheatOn("ultracraft.super-speed") ? 1.6f : 1f);
             nm.jumpPower = baseJumpPower * (1f + 0.24f * (fxJump + 1));
             if (nm.dead || nm.rb.isKinematic || mcPaused) return;
             var v = nm.rb.velocity;
@@ -3091,7 +3123,7 @@ namespace UltraBridge
                 var mask = pp != null ? pp.mainTex : null;
                 if (mask == null || mask.width != w || mask.height != h) continue;
                 int seq = ++nextSeq;
-                var job = new Readback { seq = seq, slot = seq % Slots, w = w, h = h, maskBpp = maskBpp };
+                var job = new Readback { seq = seq, slot = seq % Slots, w = w, h = h, maskBpp = maskBpp, drawnAt = NowMicros() };
                 // the exact view this frame was drawn from: Minecraft draws its world from the same one, so the two
                 // never slide apart while the mouse moves
                 var cc = MonoSingleton<CameraController>.Instance;
@@ -3113,6 +3145,8 @@ namespace UltraBridge
         class Readback
         {
             public int seq, slot, w, h, maskBpp, done;
+            // when it was drawn (NowMicros), for Minecraft to tell how old a frame is when it shows it
+            public int drawnAt;
             public bool failed;
             // eye x y z (Minecraft), yaw, pitch, roll, fov at the moment the frame was drawn
             public float[] pose;
@@ -3141,6 +3175,7 @@ namespace UltraBridge
             hdr[4] = job.slot;
             hdr[5] = job.maskBpp;
             hdr[6] = 2;
+            hdr[7] = job.drawnAt;
             // ints 8..14: the frame's view as floats; 15: 1 when they're there
             float* fp = (float*)(hdr + 8);
             if (job.pose != null) for (int i = 0; i < 7; i++) fp[i] = job.pose[i];

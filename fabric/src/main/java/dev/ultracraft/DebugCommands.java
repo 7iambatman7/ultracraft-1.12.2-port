@@ -87,6 +87,9 @@ final class DebugCommands {
 			case "op" -> UcNet.toServer(String.join(" ", java.util.Arrays.copyOfRange(a, 1, a.length)));
 			case "mobs" -> UltracraftConfig.mcMobs = a[1].equals("1");
 			case "settings" -> mc.setScreen(new UcSettingsScreen(null));
+			case "page" -> mc.setScreen(UcSettingsScreen.page(a[1]));
+			case "picker" -> mc.setScreen(new UcMusicScreen(new UcSettingsScreen(null)));
+			case "cheat" -> UcCheats.debugSet(a[1], a[2].equals("1"));
 			case "respawn" -> mc.player.respawn();
 			case "state" -> org.slf4j.LoggerFactory.getLogger("ultracraft").info("[debug] stains={} grind={} wave={} shopTouch={} shopNear={} active={} hands={} pos={} alive={} boss={} money={}",
 				BloodStains.count(), CyberGrind.running, CyberGrind.wave, Ultracraft.shopTouch, Ultracraft.shopNear, Ultracraft.active, Ultracraft.hands, mc.player.position(),

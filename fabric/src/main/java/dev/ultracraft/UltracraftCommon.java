@@ -91,6 +91,7 @@ public final class UltracraftCommon implements ModInitializer {
 		});
 		// every V1's spawns, bosses and Cyber Grind (and "Minecraft Mobs" off: monsters that came back with their chunks go)
 		ServerTickEvents.END_SERVER_TICK.register(ServerOps::tick);
+		Arenas.register();
 		UcNet.registerCommon();
 		CommandRegistrationCallback.EVENT.register((dispatcher, registries, environment) -> UkCommands.register(dispatcher));
 		// a world closing mid-warning or mid-fight: nothing of it carries into the next world

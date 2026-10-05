@@ -199,6 +199,18 @@ namespace UltraBridge
                 case "TEX":
                     ApplyTexture(rest);
                     break;
+                case "SPAWNABLES":
+                {
+                    // debug: every enemy the Sandbox can spawn (its name, its type)
+                    var sb = new StringBuilder("SPAWNABLES");
+                    var seen = new HashSet<string>();
+                    foreach (var db in Resources.FindObjectsOfTypeAll<SpawnableObjectsDatabase>())
+                        if (db.enemies != null)
+                            foreach (var e in db.enemies)
+                                if (e != null && seen.Add(e.objectName)) sb.Append(" | ").Append(e.objectName).Append('=').Append(e.enemyType);
+                    Net.Send(sb.ToString());
+                    break;
+                }
                 case "SHOPRQ":
                 {
                     // debug: how each part of a shop is drawn (queue, shader, depth test and write), to find what
@@ -562,6 +574,8 @@ namespace UltraBridge
             if (so == null || nm == null)
             {
                 Net.Send("SPAWNED none " + name);
+                // Minecraft stops asking for an enemy this ULTRAKILL doesn't have
+                if (so == null) Net.Send("NOSPAWN " + name);
                 return null;
             }
             var p = McToUk(mcFeet);

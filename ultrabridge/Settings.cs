@@ -46,6 +46,7 @@ namespace UltraBridge
                         if (p[0] == "impact" && float.TryParse(p[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) ImpactScale = Mathf.Clamp(f, 0.1f, 3f);
                         // how often ULTRAKILL draws: every frame it draws costs the graphics card Minecraft needs too
                         if (p[0] == "fps" && int.TryParse(p[1], out var fps)) FpsCap = Mathf.Clamp(fps, 30, 240);
+                        if (p[0] == "lowlat") LowLatency = p[1] == "1";
                     }
                     break;
                 case "STEVE":
@@ -95,6 +96,21 @@ namespace UltraBridge
                     ApplyPref(key, value);
                     break;
                 }
+                case "CHEAT":
+                    HandleCheat(rest);
+                    break;
+                case "MUSIC":
+                case "MUSICOPTS":
+                case "THEME":
+                    HandleMusic(cmd, rest);
+                    break;
+                case "MUSICINFO":
+                    Net.Send(MusicInfo());
+                    break;
+                case "ADDSTYLE":
+                    // debug: ADDSTYLE n: style points, as if earned
+                    MonoSingleton<StyleHUD>.Instance?.AddPoints(int.Parse(rest.Trim()), "ultrakill.kill", null, null);
+                    break;
                 case "QUIT":
                     Plugin.Log.LogInfo("Minecraft closed: quitting");
                     Application.Quit();
@@ -171,6 +187,10 @@ namespace UltraBridge
         {
             ApplyBinds();
             foreach (var kv in PrefOverrides) ApplyPref(kv.Key, kv.Value);
+            ApplyCheats();
+            rankSent = -1;
+            if (Net.Connected) SendSongs();
+            MusicChanged();
             var pm = MonoSingleton<PrefsManager>.Instance;
             if (pm == null) return;
             var sb = new StringBuilder("UKPREFS ");
@@ -252,10 +272,27 @@ namespace UltraBridge
     [HarmonyPatch(typeof(PrefsManager), nameof(PrefsManager.GetBool))]
     static class PrefBool
     {
-        static void Postfix(string key, ref bool __result)
+        static void Postfix(string key, bool fallback, ref bool __result)
         {
-            if (!Bridge.ReadingStoredPrefs && Bridge.PrefOverrides.TryGetValue(key, out var v) && v is bool b) __result = b;
+            if (Bridge.ReadingStoredPrefs) return;
+            if (Bridge.PrefOverrides.TryGetValue(key, out var v) && v is bool b) __result = b;
+            // ULTRAKILL's cheats as the real game left them stay out of Ultracraft (Minecraft's Cheats settings switch them)
+            else if (Bridge.AllWeapons && key != null && key.StartsWith("cheat.")) __result = fallback;
         }
+    }
+
+    /// <summary>ULTRAKILL saves its cheats in its settings files (cheat.*); while it runs for Ultracraft they're never
+    /// written there, nor cleared (the real game's own choices stay as they were).</summary>
+    [HarmonyPatch(typeof(PrefsManager), nameof(PrefsManager.SetBool))]
+    static class CheatsNotSaved
+    {
+        static bool Prefix(string key) => !(Bridge.AllWeapons && key != null && key.StartsWith("cheat."));
+    }
+
+    [HarmonyPatch(typeof(PrefsManager), nameof(PrefsManager.DeleteKey))]
+    static class CheatsNotCleared
+    {
+        static bool Prefix(string key) => !(Bridge.AllWeapons && key != null && key.StartsWith("cheat."));
     }
 
     [HarmonyPatch(typeof(PrefsManager), nameof(PrefsManager.GetBoolLocal))]

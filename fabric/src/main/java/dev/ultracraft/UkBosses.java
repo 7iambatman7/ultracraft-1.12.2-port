@@ -108,6 +108,11 @@ final class UkBosses {
 	private static int fightId, nextId = 1, fightTicks, farTicks;
 	private static Vec3 bossAt;
 	private static int saveTicks;
+	/** Who hears the boss's theme (its own ULTRAKILL song) until the fight is over. */
+	private static ServerPlayer themeFor;
+	/** An arena's fight (Arenas): its layer, and what happens when the boss is beaten. */
+	private static String arenaLayer;
+	private static Runnable arenaWin;
 	/** The player it's coming for (in multiplayer the others can join in: they see it, and share the prize). */
 	private static java.util.UUID target;
 
@@ -232,6 +237,24 @@ final class UkBosses {
 			mods.addAll(chosen);
 		}
 		sp.sendSystemMessage(Component.literal("[Ultracraft] (set to " + describe() + ")").withStyle(ChatFormatting.GRAY));
+	}
+
+	/** An arena's boss: it was waiting there, so there's no warning; it comes onto the dais at once. */
+	static boolean arena(ServerPlayer sp, String key, Vec3 at, String layer, Runnable onBeaten) {
+		if (phase != Phase.IDLE) return false;
+		Boss b = byKey(key);
+		if (b == null) return false;
+		boss = b;
+		target = sp.getUUID();
+		difficulty = difficultyFor(UkProgress.get(sp));
+		rollMods(sp);
+		spot = at;
+		arrive(sp);
+		// (after arrive: it ends any earlier fight's arena)
+		arenaLayer = layer;
+		arenaWin = onBeaten;
+		UcNet.send(sp, "C:THEME boss:" + boss.key + " arena:" + layer);
+		return true;
 	}
 
 	/** Its difficulty by how many bosses this player has beaten. */
@@ -378,6 +401,9 @@ final class UkBosses {
 		StringBuilder keys = new StringBuilder();
 		for (Mod m : mods) keys.append(keys.length() > 0 ? "," : "").append(m.key);
 		UcNet.send(sp, String.format(Locale.ROOT, "BOSS %d %s %.2f %.2f %.2f %d %s", fightId, boss.key, at.x, at.y, at.z, difficulty, keys.length() > 0 ? keys : "-"));
+		// its own song, where ULTRAKILL has one (the player's Boss Themes setting decides)
+		themeFor = sp;
+		UcNet.send(sp, "C:THEME boss:" + boss.key);
 		// ECLIPSE: night falls for the fight
 		if (has("eclipse") && level.dimensionType().hasSkyLight()) {
 			eclipseLevel = level;
@@ -392,6 +418,10 @@ final class UkBosses {
 
 	/** The fight is over (won, lost, left): the sun comes back. */
 	private static void endEffects() {
+		if (themeFor != null) UcNet.send(themeFor, "C:THEME -");
+		themeFor = null;
+		arenaLayer = null;
+		arenaWin = null;
 		if (eclipseLevel != null && eclipseFrom >= 0) eclipseLevel.setDayTime(eclipseFrom + fightTicks);
 		eclipseLevel = null;
 		eclipseFrom = -1;
@@ -444,6 +474,7 @@ final class UkBosses {
 	static void beaten(ServerPlayer sp, int id, Vec3 at) {
 		if (phase != Phase.FIGHT || id != fightId || !isTarget(sp)) return;
 		Boss b = boss;
+		Runnable arenaCleared = arenaWin;
 		ServerLevel level = sp.level();
 		UkProgress p = UkProgress.get(sp);
 		p.beaten.merge(b.key, 1, Integer::sum);
@@ -479,6 +510,7 @@ final class UkBosses {
 			UcNet.send(o, "HUD <color=#FF4343>" + b.name + "</color> DEFEATED. " + paid);
 		}
 		target = null;
+		if (arenaCleared != null) arenaCleared.run();
 	}
 
 	/** BOSSGONE id why: ULTRAKILL couldn't bring it in, or it dropped out of the world. */

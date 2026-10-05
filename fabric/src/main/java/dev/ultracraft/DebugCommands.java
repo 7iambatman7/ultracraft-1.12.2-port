@@ -57,6 +57,7 @@ final class DebugCommands {
 			case "close" -> mc.setScreen(null);
 			case "swing" -> mc.player.swing(InteractionHand.MAIN_HAND);
 			case "nopause" -> mc.options.pauseOnLostFocus = false;
+			case "view" -> mc.options.setCameraType(net.minecraft.client.CameraType.values()[Integer.parseInt(a[1])]);
 			case "shot" -> Screenshot.grab(mc.gameDirectory, a[1] + ".png", mc.getMainRenderTarget(), 1, msg -> {});
 			case "arm" -> {
 				V1Arm.handX = Float.parseFloat(a[1]);

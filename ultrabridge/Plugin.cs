@@ -449,6 +449,8 @@ namespace UltraBridge
                 KeepCheats();
                 UpdateMusic();
                 UpdateStyleRank();
+                UpdateOil();
+                UpdateArmExport();
                 UpdateFreeze();
                 UpdateDoll();
                 KeepAudio();
@@ -1017,7 +1019,7 @@ namespace UltraBridge
             }
             // the Sandbox hands out the Spawner Arm (weapon slot 6) through its cheat; make sure V1 has it
             var gc = MonoSingleton<GunControl>.Instance;
-            if (gc != null && gc.slot6.Count == 0)
+            if (gc != null && gc.slot6.Count == 0 && CheatOn("ultrakill.spawner-arm"))
             {
                 try
                 {
@@ -2513,6 +2515,7 @@ namespace UltraBridge
             SizeDoll();
             // Minecraft turns its paper doll's body toward the cursor (the head turns further, in LateUpdate)
             dollModel.localRotation = Quaternion.Euler(0f, dollYaw, 0f);
+            dollModel.rotation = Quaternion.AngleAxis(-dollPitch * 0.4f, dollModel.right) * dollModel.rotation;
             if (dollBusy || dollBase == null) return;
             // last frame's supersampled picture, averaged 2x2 down to the size Minecraft shows it at
             Graphics.Blit(dollRT, dollOutRT);
@@ -2618,6 +2621,7 @@ namespace UltraBridge
                 {
                     if (t.name.IndexOf("head", StringComparison.OrdinalIgnoreCase) < 0 || t.GetComponent<Renderer>() != null) continue;
                     dollHead = t;
+                    Plugin.Log.LogInfo("V1 doll head: " + t.name + " under " + (t.parent != null ? t.parent.name : "-"));
                     break;
                 }
                 // a soft fill so the side away from the key light isn't black: ULTRAKILL's shader takes its ambient
@@ -2947,6 +2951,15 @@ namespace UltraBridge
             eid.weakPoint = head;
             eid.health = 2f;
             eid.overrideCenter = center.transform;
+            // what EnemyIdentifier.Awake (skipped for stand-ins) would set up: gasoline and fire need these lists
+            eid.flammables = new List<Flammable>();
+            eid.burners = new List<Flammable>();
+            // ULTRAKILL's explosions (rockets, cores, the Knuckleblaster's blast) only hurt an enemy whose own object
+            // has a collider: a switched-off one, so it counts without touching anything
+            var rootCol = root.AddComponent<BoxCollider>();
+            rootCol.size = new Vector3(w, h, w);
+            rootCol.center = new Vector3(0, h * 0.5f, 0);
+            rootCol.enabled = false;
             foreach (var go in new[] { body, head })
             {
                 var eii = go.AddComponent<EnemyIdentifierIdentifier>();
@@ -3087,6 +3100,7 @@ namespace UltraBridge
             HoldPause();
             if (!levelPrepared) return;
             UpdateSteveCamera();
+            UpdateSelfBody();
             PoseDollHead();
             var pp = MonoSingleton<PostProcessV2_Handler>.Instance;
             var vc = pp != null ? pp.virtualCam : null;
@@ -3357,9 +3371,9 @@ namespace UltraBridge
 
         /// <summary>DMG mob damage head explosion parry by: by is the ULTRAKILL enemy that dealt it (0 = V1), so the mob
         /// turns on whoever hurt it.</summary>
-        public void ReportDamage(McProxy p, float multiplier, bool head, bool explosion, Vector3 hitPoint, bool parry = false, int by = 0)
+        public void ReportDamage(McProxy p, float multiplier, bool head, bool explosion, Vector3 hitPoint, bool parry = false, int by = 0, bool fire = false)
         {
-            Net.Send("DMG " + p.id + " " + S(multiplier) + " " + (head ? 1 : 0) + " " + (explosion ? 1 : 0) + " " + (parry ? 1 : 0) + " " + by);
+            Net.Send("DMG " + p.id + " " + S(multiplier) + " " + (head ? 1 : 0) + " " + (explosion ? 1 : 0) + " " + (parry ? 1 : 0) + " " + by + " " + (fire ? 1 : 0));
         }
 
         // ------------------------------------------------------------ blood
@@ -3401,8 +3415,11 @@ namespace UltraBridge
         }
 
         /// <summary>A mob's death, the way a Filth's chest bursts: a blood explosion, gibs, and the big healing splatters.</summary>
+        static readonly BSType[] SmallGibs = { BSType.jawChunk, BSType.brainChunk, BSType.skullChunk, BSType.eyeball };
+
         void DeathGore(McProxy p, Vector3 at, float w, float h)
         {
+            if (p != null && p.type == "end_crystal") return;
             var bsm = MonoSingleton<BloodsplatterManager>.Instance;
             if (bsm == null) return;
             var eid = p != null ? p.eid : null;
@@ -3421,7 +3438,7 @@ namespace UltraBridge
                 int gibs = Mathf.Clamp(Mathf.RoundToInt(h * 2f), 3, 10);
                 for (int i = 0; i < gibs; i++)
                 {
-                    var gib = bsm.GetGib(i < 2 ? BSType.jawChunk : BSType.gib);
+                    var gib = bsm.GetGib(SmallGibs[i % SmallGibs.Length]);
                     if (gib == null) continue;
                     gib.transform.SetPositionAndRotation(at + UnityEngine.Random.insideUnitSphere * Mathf.Max(0.3f, w * 0.4f), UnityEngine.Random.rotation);
                     if (gz != null) gz.SetGoreZone(gib);
@@ -3515,7 +3532,13 @@ namespace UltraBridge
             // against that enemy, not V1
             int by = 0;
             if (__instance.hitter == "enemy") by = Bridge.I != null ? Bridge.I.AttackerOf(p) : 0;
-            Bridge.I?.ReportDamage(p, dmg, head, fromExplosion, hitPoint, parry, by);
+            // burning (gasoline or the Firestarter's flames): Minecraft fire, which fire resistance shrugs off
+            bool fire = __instance.hitter == "fire";
+            Bridge.Conduct(__instance, p, sourceWeapon);
+            // a touch that does nothing (the JumpStart's spark through the other limbs) isn't a hit in Minecraft
+            if (dmg < 0.001f && !parry) return false;
+            Bridge.I?.ReportDamage(p, dmg, head, fromExplosion, hitPoint, parry, by, fire);
+            if (p.type == "end_crystal") return false;
             // real ULTRAKILL blood where it was hit, sized like a Filth's: splatters, stains, and V1's blood healing
             // when close (the same amounts ULTRAKILL gives: 3 per pellet or blast, 1 per nail)
             var type = head ? GoreType.Head : dmg >= 1f || fromExplosion ? GoreType.Body : GoreType.Small;
@@ -3825,6 +3848,7 @@ namespace UltraBridge
         static void Postfix(BurningVoxel __instance)
         {
             Bridge.I?.ReportFire(__instance.transform.position);
+            Bridge.I?.ReportOilBurn(__instance.transform.position);
         }
     }
 

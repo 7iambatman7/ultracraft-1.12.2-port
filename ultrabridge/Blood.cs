@@ -11,7 +11,8 @@ namespace UltraBridge
     public partial class Bridge
     {
         static readonly GoreType[] BurstGore = { GoreType.Body, GoreType.Head, GoreType.Limb, GoreType.Splatter, GoreType.Small, GoreType.Splatter };
-        static readonly BSType[] BurstGibs = { BSType.gib, BSType.gib, BSType.gib, BSType.jawChunk, BSType.brainChunk, BSType.skullChunk, BSType.eyeball };
+        // no BSType.gib: those are the big entrail pieces, which looked out of place on every Minecraft kill
+        static readonly BSType[] BurstGibs = { BSType.jawChunk, BSType.brainChunk, BSType.skullChunk, BSType.eyeball };
 
         /// <summary>Where something died lately, and how far around it its blood may stain.</summary>
         struct Death

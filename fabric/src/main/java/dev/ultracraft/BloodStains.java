@@ -41,6 +41,9 @@ final class BloodStains {
 	private static final float[] bx = new float[MAX], by = new float[MAX], bz = new float[MAX];
 	private static final float[] sx = new float[MAX], sy = new float[MAX], sz = new float[MAX];
 	private static final byte[] splat = new byte[MAX], blockLight = new byte[MAX], skyLight = new byte[MAX], shade = new byte[MAX];
+	/** What it is: blood, or the Firestarter's gasoline (OIL). */
+	private static final byte[] kind = new byte[MAX];
+	private static final byte BLOOD = 0, OIL = 1;
 	private static final long[] support = new long[MAX];
 	private static final boolean[] alive = new boolean[MAX];
 	private static int next, live;
@@ -71,7 +74,30 @@ final class BloodStains {
 
 	/** STAINS x,y,z,nx,ny,nz;...: where ULTRAKILL's blood landed (Minecraft coordinates) and the way the surface faces. */
 	static void add(ClientLevel level, String data) {
+		add(level, data, BLOOD);
+	}
+
+	/** OILS x,y,z,nx,ny,nz: the Firestarter's gasoline landed there (ULTRAKILL folds it into its picture like blood). */
+	static void addOil(ClientLevel level, String data) {
+		add(level, data, OIL);
+	}
+
+	/** Gasoline caught fire around there: it burns away. */
+	static void burnOil(float x, float y, float z) {
+		for (int i = 0; i < MAX; i++) {
+			if (!alive[i] || kind[i] != OIL) continue;
+			float dx = cx[i] - x, dy = cy[i] - y, dz = cz[i] - z;
+			if (dx * dx + dy * dy + dz * dz > 2.25f) continue;
+			alive[i] = false;
+			live--;
+		}
+	}
+
+	private static byte adding = BLOOD;
+
+	private static void add(ClientLevel level, String data, byte what) {
 		if (level == null) return;
+		adding = what;
 		for (String rec : data.split(";")) {
 			String[] a = rec.split(",");
 			if (a.length < 6) continue;
@@ -110,7 +136,7 @@ final class BloodStains {
 		t.normalize();
 		Vector3f b = new Vector3f(n).cross(t);
 		// a bit bigger than ULTRAKILL's own: fewer, fuller splats read better on Minecraft's blocks
-		float turn = RANDOM.nextFloat() * Mth.TWO_PI, half = size * 1.0f * (0.85f + RANDOM.nextFloat() * 0.45f);
+		float turn = RANDOM.nextFloat() * Mth.TWO_PI, half = (adding == OIL ? 0.55f : size) * (0.85f + RANDOM.nextFloat() * 0.45f);
 		float c = Mth.cos(turn) * half, s = Mth.sin(turn) * half;
 		ax[i] = t.x * c + b.x * s;
 		ay[i] = t.y * c + b.y * s;
@@ -122,6 +148,7 @@ final class BloodStains {
 		sy[i] = ny;
 		sz[i] = nz;
 		splat[i] = (byte) RANDOM.nextInt(4);
+		kind[i] = adding;
 		// fresh blood is a little brighter or darker from splash to splash
 		shade[i] = (byte) RANDOM.nextInt(64);
 		support[i] = on.asLong();
@@ -177,9 +204,12 @@ final class BloodStains {
 			double dx = cx[i] - cam.x, dy = cy[i] - cam.y, dz = cz[i] - cam.z;
 			if (dx * dx + dy * dy + dz * dz > r2) continue;
 			int l = (blockLight[i] & 15) * 16 + (skyLight[i] & 15);
-			// ULTRAKILL's blood: a deep red, darker where it's darker (Minecraft's own light there, as on the block)
+			// ULTRAKILL's blood: a deep red, darker where it's darker (Minecraft's own light there, as on the block);
+			// gasoline: a dark, oily brown
 			float k = 0.78f + (shade[i] & 63) / 63f * 0.22f;
-			int color = ARGBf(0.94f, 0.5f * k * lightmap[l * 3], 0.035f * k * lightmap[l * 3 + 1], 0.03f * k * lightmap[l * 3 + 2]);
+			int color = kind[i] == OIL
+				? ARGBf(0.88f, 0.16f * k * lightmap[l * 3], 0.12f * k * lightmap[l * 3 + 1], 0.05f * k * lightmap[l * 3 + 2])
+				: ARGBf(0.94f, 0.5f * k * lightmap[l * 3], 0.035f * k * lightmap[l * 3 + 1], 0.03f * k * lightmap[l * 3 + 2]);
 			float u0 = (splat[i] & 1) * 0.5f, v0 = (splat[i] >> 1) * 0.5f;
 			corner(vc, pose, i, -1, -1, color, u0, v0 + 0.5f);
 			corner(vc, pose, i, 1, -1, color, u0 + 0.5f, v0 + 0.5f);

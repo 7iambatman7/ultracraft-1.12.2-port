@@ -31,7 +31,8 @@ final class UcCheats {
 		new Cheat("ultrakill.invincible-enemies", "Invincible Enemies", "ULTRAKILL's enemies can't be killed.", false),
 		new Cheat("ultrakill.hide-weapons", "Hide Weapons", "V1's guns and arms aren't drawn.", false),
 		new Cheat("ultrakill.hide-ui", "Hide ULTRAKILL's HUD", "ULTRAKILL's HUD (health, style, weapon) isn't drawn.", false),
-		new Cheat("ultrakill.ghost-drone-mode", "Drone Haunting", "Ghostly drones haunt V1 (ULTRAKILL's cheat).", false));
+		new Cheat("ultrakill.ghost-drone-mode", "Drone Haunting", "Ghostly drones haunt V1 (ULTRAKILL's cheat).", false),
+		new Cheat("ultrakill.spawner-arm", "Spawner Arm", "The Sandbox's Spawner Arm in weapon slot 6: spawn ULTRAKILL's enemies and props anywhere.", false));
 
 	static final List<Cheat> ULTRACRAFT = List.of(
 		new Cheat("ultracraft.infinite-p", "Infinite P", "The shop sells everything for free.", true),

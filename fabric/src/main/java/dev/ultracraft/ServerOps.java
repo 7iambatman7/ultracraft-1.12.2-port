@@ -20,6 +20,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
@@ -214,9 +215,10 @@ public final class ServerOps {
 				// SLAM x y z drop: V1 slammed into the ground after falling `drop` blocks; from high up it leaves a crater
 				double x = Double.parseDouble(a[1]), y = Double.parseDouble(a[2]), z = Double.parseDouble(a[3]);
 				float power = Math.min(16f, Float.parseFloat(a[4]) / 12.5f);
+				slamHurt(sp, level, x, y, z, 1.5 + Math.max(0f, power) * 0.4);
 				if (power < 1f) return;
 				Level.ExplosionInteraction blocks = UltracraftConfig.playerBlockDamage ? Level.ExplosionInteraction.TNT : Level.ExplosionInteraction.NONE;
-				level.explode(sp, null, V1_SLAM, x, y - 0.5, z, power, false, blocks, ParticleTypes.EXPLOSION, ParticleTypes.EXPLOSION_EMITTER, BLAST_DEBRIS, SoundEvents.GENERIC_EXPLODE);
+				level.explode(sp, null, V1_BLAST, x, y - 0.5, z, power, false, blocks, ParticleTypes.EXPLOSION, ParticleTypes.EXPLOSION_EMITTER, BLAST_DEBRIS, SoundEvents.GENERIC_EXPLODE);
 			}
 			case "RAIL" -> {
 				// RAIL x y z dx dy dz length radius: the Electric railcannon bores through the terrain
@@ -268,6 +270,14 @@ public final class ServerOps {
 				}
 			}
 			case "DMG" -> damage(sp, level, a);
+			case "WHIP" -> {
+				// WHIP id vx vy vz: V1's Whiplash reels this mob in (its speed in blocks a tick)
+				if (level.getEntity(Integer.parseInt(a[1])) instanceof LivingEntity le && le.isAlive() && !UcNet.isV1(le)) {
+					le.setDeltaMovement(Double.parseDouble(a[2]), Double.parseDouble(a[3]), Double.parseDouble(a[4]));
+					le.fallDistance = 0;
+					le.hurtMarked = true;
+				}
+			}
 			case "PIMPACT" -> {
 				// ULTRAKILL says this projectile hit V1: apply its own hit (arrow damage, fireball blast...) to V1
 				if (level.getEntity(Integer.parseInt(a[1])) instanceof Projectile pr && pr.isAlive()) {
@@ -360,7 +370,13 @@ public final class ServerOps {
 		boolean explosion = a[4].equals("1");
 		boolean parry = a.length > 5 && a[5].equals("1");
 		int by = a.length > 6 ? Integer.parseInt(a[6]) : 0;
+		boolean fire = a.length > 7 && a[7].equals("1");
 		Entity e = level.getEntity(id);
+		if (e instanceof EndCrystal crystal) {
+			// an end crystal V1 shot or blew up: it goes off, whatever the world-destruction setting
+			if (crystal.isAlive()) crystal.hurtServer(level, explosion ? level.damageSources().explosion(sp, sp) : level.damageSources().playerAttack(sp), Math.max(1f, amount * 10f));
+			return;
+		}
 		if (!(e instanceof LivingEntity le) || !le.isAlive()) return;
 		UkEnemyEntity enemy = by != 0 ? state(sp).enemies.get(by) : null;
 		// V1s don't hurt each other (their shots stop at a teammate); enemies do
@@ -368,7 +384,9 @@ public final class ServerOps {
 		// ULTRAKILL has no invulnerability frames; 1 ULTRAKILL damage = 10 Minecraft health
 		le.invulnerableTime = 0;
 		var src = enemy != null && !enemy.isRemoved() ? level.damageSources().mobAttack(enemy)
-			: explosion ? level.damageSources().explosion(sp, sp) : level.damageSources().playerAttack(sp);
+			: fire ? level.damageSources().onFire() : explosion ? level.damageSources().explosion(sp, sp) : level.damageSources().playerAttack(sp);
+		// burning gasoline sets it alight in Minecraft too (fire resistance, and mobs that don't burn, shrug it off)
+		if (fire && !le.fireImmune()) le.setRemainingFireTicks(Math.max(le.getRemainingFireTicks(), 60));
 		le.hurtServer(level, src, amount * 10f);
 		if (enemy != null) return;
 		if (parry) {
@@ -438,6 +456,21 @@ public final class ServerOps {
 	}
 
 	// ------------------------------------------------------------------ blasts
+
+	/** A ground slam: ULTRAKILL's 2 damage to every mob (not player) close to where V1 came down. */
+	private static void slamHurt(ServerPlayer sp, ServerLevel level, double x, double y, double z, double radius) {
+		var box = new net.minecraft.world.phys.AABB(x - radius, y - 1.5, z - radius, x + radius, y + 1.0, z + radius);
+		for (LivingEntity le : level.getEntitiesOfClass(LivingEntity.class, box, m -> m.isAlive() && !(m instanceof Player))) {
+			if (le.distanceToSqr(x, le.getY(), z) > radius * radius) continue;
+			le.invulnerableTime = 0;
+			le.hurtServer(level, level.damageSources().playerAttack(sp), 20f);
+			if (!le.isAlive()) {
+				UcNet.send(sp, "KILL " + le.getId());
+				float worth = StyleRewards.kill(sp, le.position().add(0, le.getBbHeight() * 0.5, 0));
+				if (worth > 1f) net.minecraft.world.entity.ExperienceOrb.award(level, le.position(), Math.round(5f * (worth - 1f)) + 2);
+			}
+		}
+	}
 
 	/** ULTRAKILL blasts break blocks and push mobs, but never hurt anything twice or shove a V1. */
 	private static final ExplosionDamageCalculator V1_BLAST = new ExplosionDamageCalculator() {

@@ -31,6 +31,11 @@ public final class V1Arm {
 
 	/** Draw the arm with its hand at the pose's origin (a fist when nothing is held); mirrored for a left main hand. */
 	public static void render(PoseStack poseStack, SubmitNodeCollector collector, int light, HumanoidArm arm, boolean fist) {
+		// ULTRAKILL's own arm, once ULTRAKILL has written it out (V1ArmMesh); this blocky one till then
+		if (V1ArmMesh.ready()) {
+			V1ArmMesh.render(poseStack, collector, light, arm);
+			return;
+		}
 		poseStack.pushPose();
 		if (arm == HumanoidArm.LEFT) poseStack.scale(-1f, 1f, 1f);
 		poseStack.translate(handX, handY, handZ);

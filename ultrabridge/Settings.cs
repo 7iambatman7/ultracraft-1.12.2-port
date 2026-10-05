@@ -49,6 +49,16 @@ namespace UltraBridge
                         if (p[0] == "lowlat") LowLatency = p[1] == "1";
                     }
                     break;
+                case "VIEW":
+                    // VIEW 0|1|2: Minecraft's camera is first person, behind V1 or in front (F5)
+                    SetView(int.TryParse(rest.Trim(), out var view) ? view : 0);
+                    break;
+                case "COMBATTEST":
+                    Net.Send("COMBATTEST " + CombatTest(rest.Trim()));
+                    break;
+                case "ARMINFO":
+                    Net.Send("ARMINFO " + ArmInfo());
+                    break;
                 case "STEVE":
                 case "STEVECAM":
                 case "STEVEPOS":

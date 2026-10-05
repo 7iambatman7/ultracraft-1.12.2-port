@@ -23,6 +23,8 @@ public abstract class EntityRenderDispatcherMixin {
 	@Inject(method = "shouldRender", at = @At("HEAD"), cancellable = true)
 	private <E extends Entity> void ultracraft$hideOtherV1(E entity, Frustum frustum, double x, double y, double z, CallbackInfoReturnable<Boolean> cir) {
 		if (Ultracraft.active && entity instanceof Player p && p != Minecraft.getInstance().player && UcNet.isV1(p)) cir.setReturnValue(false);
+		// ourselves in third person (F5): ULTRAKILL draws V1's body there, not Steve
+		if (Ultracraft.active && entity == Minecraft.getInstance().player) cir.setReturnValue(false);
 		// experience flying into V1 gathers where Minecraft has the player, right at ULTRAKILL's camera: drawn there it
 		// was a giant lime orb over the whole view
 		if (Ultracraft.active && entity instanceof ExperienceOrb && entity.distanceToSqr(x, y, z) < 25.0) cir.setReturnValue(false);

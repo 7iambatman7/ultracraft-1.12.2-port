@@ -42,8 +42,9 @@ public abstract class CameraMixin {
 			Ultracraft.steveDrawn = true;
 			return;
 		}
-		// asleep in a bed: Minecraft's own view from the pillow
-		if (!Ultracraft.active || detached || Movement.sleeping) return;
+		// asleep in a bed: Minecraft's own view from the pillow. In third person (F5) ULTRAKILL's camera moves out
+		// behind V1 too (VIEW), so its frames still say where to draw from
+		if (!Ultracraft.active || Movement.sleeping) return;
 		UkFrame.updateForCamera();
 		float[] f = UkFrame.framePose;
 		if (f != null) {
@@ -52,7 +53,7 @@ public abstract class CameraMixin {
 			return;
 		}
 		UkLink.Pose p = UkLink.pose;
-		if (p == null) return;
+		if (p == null || detached) return;
 		setRotation(p.yaw, p.pitch);
 		setPosition(p.ex, p.ey, p.ez);
 	}

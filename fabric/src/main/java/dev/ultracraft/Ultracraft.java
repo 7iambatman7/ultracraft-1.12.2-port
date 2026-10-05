@@ -200,6 +200,20 @@ public final class Ultracraft implements ClientModInitializer {
 
 	// ------------------------------------------------------------------ per frame
 
+	private static int viewSent = -1;
+
+	/** Minecraft's camera (F5): first person, behind V1, or in front of it; ULTRAKILL's camera does the same (VIEW). */
+	private static void sendView(Minecraft mc) {
+		int view = switch (mc.options.getCameraType()) {
+			case FIRST_PERSON -> 0;
+			case THIRD_PERSON_BACK -> 1;
+			case THIRD_PERSON_FRONT -> 2;
+		};
+		if (view == viewSent || !UkLink.connected) return;
+		viewSent = view;
+		UkLink.send("VIEW " + view);
+	}
+
 	/** This frame's input already went to ULTRAKILL, the moment its last frame came in (UkFrame.waitForNext). */
 	static boolean inputSentEarly;
 
@@ -233,6 +247,7 @@ public final class Ultracraft implements ClientModInitializer {
 		}
 		sendMobsDrawn(mc);
 		sendPuppets(mc);
+		sendView(mc);
 		Movement.frame(mc);
 		// asleep: Minecraft's own view from the bed (its fade to morning), no V1 layer
 		if (Movement.sleeping) return;
@@ -440,6 +455,7 @@ public final class Ultracraft implements ClientModInitializer {
 		}
 		if (p == null || mc.level == null) return;
 		safely("blood", () -> BloodStains.tick(mc.level));
+		safely("oil", () -> OilDrips.tick(mc));
 		if (autoPending && UltracraftConfig.autoV1 && UkLink.ready && !active && mc.screen == null) {
 			// one-click play: become V1 as soon as both games are up
 			autoPending = false;
@@ -556,6 +572,7 @@ public final class Ultracraft implements ClientModInitializer {
 		Fluids.reset();
 		ShopExport.reset();
 		UkLink.send("HANDS " + (hands ? 1 : 0));
+		viewSent = -1;
 	}
 
 	/** Back to Steve: nothing of V1's may linger (frozen ticks, ULTRAKILL's enemies' stand-ins). */
@@ -569,6 +586,8 @@ public final class Ultracraft implements ClientModInitializer {
 		shopTouch = false;
 		shopNear = false;
 		UkLink.send("ZOOM 1");
+		UkLink.send("VIEW 0");
+		viewSent = 0;
 		if (UltracraftConfig.steveEnemies && UkLink.ready) {
 			// ULTRAKILL's enemies stay: drawn from Steve's camera, still fighting (their stand-ins stay in the world)
 			steveView = true;
@@ -660,7 +679,7 @@ public final class Ultracraft implements ClientModInitializer {
 			UcNet.toServer(msg);
 		} else if (msg.startsWith("UI ")) {
 			setUiMode(mc, msg.endsWith("1"));
-		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED|SPAWNABLES|MUSICINFO) .*")) {
+		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED|SPAWNABLES|MUSICINFO|ARMINFO|COMBATTEST) .*")) {
 			// debug answers (DebugCommands "uk ...")
 			org.slf4j.LoggerFactory.getLogger("ultracraft").info("[uk] {}", msg);
 		} else if (msg.startsWith("SHOPZONE ")) {
@@ -676,6 +695,14 @@ public final class Ultracraft implements ClientModInitializer {
 			UcThemes.fight(mc, msg.endsWith("1"));
 		} else if (msg.startsWith("STAINS ")) {
 			BloodStains.add(mc.level, msg.substring(7));
+		} else if (msg.startsWith("OILS ")) {
+			BloodStains.addOil(mc.level, msg.substring(5));
+		} else if (msg.startsWith("OILBURN ")) {
+			String[] a = msg.split(" ");
+			BloodStains.burnOil(Float.parseFloat(a[1]), Float.parseFloat(a[2]), Float.parseFloat(a[3]));
+		} else if (msg.startsWith("OILED ")) {
+			String[] a = msg.split(" ");
+			OilDrips.set(Integer.parseInt(a[1]), Integer.parseInt(a[2]));
 		} else if (msg.equals("STAINCLEAR")) {
 			BloodStains.clear();
 		} else if (msg.startsWith("STAINSIZE ")) {
@@ -692,7 +719,7 @@ public final class Ultracraft implements ClientModInitializer {
 
 	/** ULTRAKILL's messages that act on the world, handled by the server (ServerOps). */
 	private static final java.util.regex.Pattern SERVER_OPS = java.util.regex.Pattern.compile(
-		"^(SLAM|RAIL|BOOM|HIT|FIRE|DMG|PIMPACT|PHOLD|PRELEASE|PARRY|PEARN|PADD|GEARADD|UPBUY|BOSSPOS|BOSSDEAD|BOSSGONE|GRIND|SPAWNS|UKDEAD|UKDIE|PHIT|SHURT|EQUIP|NOSPAWN|STYLE) ");
+		"^(SLAM|RAIL|BOOM|HIT|FIRE|DMG|WHIP|PIMPACT|PHOLD|PRELEASE|PARRY|PEARN|PADD|GEARADD|UPBUY|BOSSPOS|BOSSDEAD|BOSSGONE|GRIND|SPAWNS|UKDEAD|UKDIE|PHIT|SHURT|EQUIP|NOSPAWN|STYLE) ");
 
 	/** A line from the server for our Minecraft side ("C:..." in UcNet), on the client thread. */
 	static void fromServer(String msg) {
@@ -799,6 +826,12 @@ public final class Ultracraft implements ClientModInitializer {
 	private static void exportEntities(Minecraft mc, LocalPlayer self) {
 		StringBuilder sb = new StringBuilder("ENTS ");
 		for (Entity e : mc.level.entitiesForRendering()) {
+			if (e instanceof net.minecraft.world.entity.boss.enderdragon.EndCrystal crystal) {
+				if (!crystal.isAlive() || e.distanceToSqr(self) > 80 * 80) continue;
+				sb.append(String.format(Locale.ROOT, "%d,end_crystal,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,1.0,1.0,0,0.0;", e.getId(), e.getX(), e.getY(), e.getZ(),
+					e.getBbWidth(), e.getBbHeight(), e.getBbHeight() * 0.5));
+				continue;
+			}
 			// ULTRAKILL's own enemies' stand-ins are ULTRAKILL's already
 			if (e == self || !(e instanceof LivingEntity le) || !le.isAlive() || e instanceof UkEnemyEntity) continue;
 			if (e.distanceToSqr(self) > 80 * 80) continue;

@@ -2915,6 +2915,8 @@ namespace UltraBridge
             }
         }
 
+        public IEnumerable<McProxy> ProxyList() => proxies.Values;
+
         McProxy MakeProxy(int id, string type, float w, float h, float eye)
         {
             var root = new GameObject("mc_" + type + "_" + id);
@@ -3434,8 +3436,9 @@ namespace UltraBridge
                     burst.transform.position = at;
                     burst.transform.localScale = Vector3.one * Mathf.Clamp(Mathf.Max(w, h) / 3.5f, 0.6f, 3f);
                     if (gz != null) gz.SetGoreZone(burst);
+                    NoOrgans(burst);
                 }
-                int gibs = Mathf.Clamp(Mathf.RoundToInt(h * 2f), 3, 10);
+                int gibs = 0;
                 for (int i = 0; i < gibs; i++)
                 {
                     var gib = bsm.GetGib(SmallGibs[i % SmallGibs.Length]);

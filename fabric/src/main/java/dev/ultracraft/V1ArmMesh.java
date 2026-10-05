@@ -36,7 +36,7 @@ final class V1ArmMesh {
 	private record Part(float[] pos, float[] nrm, float[] uv, int[] idx, Identifier texture) {}
 
 	private static final List<Part> PARTS = new ArrayList<>();
-	private static float fov = 90f, hx, hy, hz = 1f;
+	private static float fov = 90f, hx, hy, hz = 1f, extent = 0.13f;
 	private static long nextCheck, tmpStamp, loadedStamp;
 	private static boolean loaded;
 
@@ -105,6 +105,10 @@ final class V1ArmMesh {
 			}
 			list.add(new Part(p, n, uv, ix, texIds.get(Math.max(0, tex))));
 		}
+		// its longest side
+		float[] lo = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE}, hi = {-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+		for (Part part : list) for (int i = 0; i < part.pos.length; i++) { lo[i % 3] = Math.min(lo[i % 3], part.pos[i]); hi[i % 3] = Math.max(hi[i % 3], part.pos[i]); }
+		extent = Math.max(hi[0] - lo[0], Math.max(hi[1] - lo[1], hi[2] - lo[2]));
 		PARTS.clear();
 		PARTS.addAll(list);
 		loaded = !PARTS.isEmpty();
@@ -116,7 +120,8 @@ final class V1ArmMesh {
 	static void render(PoseStack poseStack, SubmitNodeCollector collector, int light, HumanoidArm arm) {
 		// as big on screen as ULTRAKILL shows it: its hand is hz in front of ULTRAKILL's eye with ULTRAKILL's field of
 		// view, the item ITEM_DEPTH in front of Minecraft's with the hand's 70 degrees
-		float s = (float) (ITEM_DEPTH * Math.tan(Math.toRadians(35)) / (Math.max(0.05f, hz) * Math.tan(Math.toRadians(fov * 0.5))));
+		// the arm about half a block long: as big as Steve's would look, and clear of the middle of the view when it swings
+		float s = 0.5f / Math.max(0.01f, extent);
 		// right hand: turned round from ULTRAKILL's left arm (x and z flip); left hand: z flips only
 		float fx = arm == HumanoidArm.RIGHT ? -1f : 1f;
 		poseStack.pushPose();

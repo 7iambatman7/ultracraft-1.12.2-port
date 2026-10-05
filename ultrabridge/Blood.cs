@@ -12,6 +12,13 @@ namespace UltraBridge
     {
         static readonly GoreType[] BurstGore = { GoreType.Body, GoreType.Head, GoreType.Limb, GoreType.Splatter, GoreType.Small, GoreType.Splatter };
         // no BSType.gib: those are the big entrail pieces, which looked out of place on every Minecraft kill
+        /// <summary>Only the blood of a chest burst: its solid pieces (organs, chunks) are switched off.</summary>
+        public static void NoOrgans(GameObject burst)
+        {
+            foreach (var r in burst.GetComponentsInChildren<Renderer>(true))
+                if (!(r is ParticleSystemRenderer) && !(r is TrailRenderer) && !(r is LineRenderer)) r.gameObject.SetActive(false);
+        }
+
         static readonly BSType[] BurstGibs = { BSType.jawChunk, BSType.brainChunk, BSType.skullChunk, BSType.eyeball };
 
         /// <summary>Where something died lately, and how far around it its blood may stain.</summary>
@@ -68,9 +75,11 @@ namespace UltraBridge
                     burst.transform.rotation = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up) * Quaternion.AngleAxis(Random.Range(-40f, 40f), Vector3.right);
                     burst.transform.localScale = Vector3.one * Mathf.Clamp(size / 1.5f, 0.8f, 3f);
                     gz.SetGoreZone(burst);
+                    NoOrgans(burst);
                 }
                 // gibs, thrown hard
-                int gibs = Mathf.Clamp(Mathf.RoundToInt(size * 5f), 5, 18);
+                // no gibs: ULTRAKILL's organ pieces looked like big entrails on Minecraft's mobs
+                int gibs = 0;
                 for (int i = 0; i < gibs; i++)
                 {
                     var gib = bsm.GetGib(BurstGibs[i % BurstGibs.Length]);

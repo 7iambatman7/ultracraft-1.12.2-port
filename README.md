@@ -64,7 +64,7 @@ Bosses and arenas bring their own song where ULTRAKILL has one (V2: Versus, Mino
 ## Cheats
 
 **Ultracraft... → Cheats** has two groups:
-- **ULTRAKILL's own Sandbox cheats**: noclip, flight, invincibility, no weapon cooldown, infinite wall jumps, blind enemies, enemy infighting, Kill All Enemies and more.
+- **ULTRAKILL's own Sandbox cheats**: noclip, flight, invincibility, no weapon cooldown, infinite wall jumps, blind enemies, enemy infighting, Kill All Enemies, the **Spawner Arm** (off by default; turn it on here to get it in weapon slot 6) and more.
 - **Ultracraft's**: Infinite P, All Weapons & Arms, One-Hit Kills, Slow Motion, Super Speed, Infinite Stamina, Never Hungry.
 
 They're Ultracraft's settings: ULTRAKILL's own save and settings are never touched. In your own world (singleplayer, or one you host) they're always available; on someone else's server, only for operators.
@@ -99,6 +99,10 @@ them too. Other players show up as V1. Each player has their own P, gear and upg
 **Ultracraft... → ULTRAKILL Controls...** rebinds ULTRAKILL's keys (movement, dash, slide, fire, punch, arm, whiplash,
 weapons...). Click an action, press the key or mouse button; Esc cancels. Minecraft's own action on that key steps aside
 while you're V1 with guns out. F8 switches V1/Steve and V switches guns/Minecraft hands.
+
+With Minecraft hands out, V1 holds blocks, tools and food in ULTRAKILL's own arm (the Feedbacker's model, taken from
+your ULTRAKILL the first time it runs). **F5** works as V1 too: the camera moves behind V1 (or in front) and you see
+V1's body.
 
 Back as Steve (F8), ULTRAKILL's enemies stay: you still see them, they still come for you (their hits cost hearts),
 and you can fight them as Steve. Turn **ULTRAKILL While Steve** off to have them wait, frozen, until you're V1 again.

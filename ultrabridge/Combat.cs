@@ -137,6 +137,36 @@ namespace UltraBridge
         }
     }
 
+    /// <summary>V1's explosions (rockets, cores, the Knuckleblaster's blast...) hurt every Minecraft mob in reach: full
+    /// at the middle, about a third at the edge, not through walls. ULTRAKILL's own sphere only catches what it happens
+    /// to touch as it grows, which missed mobs off to the side; they're marked as hit so it doesn't count them twice.</summary>
+    [HarmonyPatch(typeof(Explosion), "Start")]
+    static class BlastsReachMobs
+    {
+        static readonly AccessTools.FieldRef<Explosion, HashSet<int>> HitColliders = AccessTools.FieldRefAccess<Explosion, HashSet<int>>("hitColliders");
+
+        static void Postfix(Explosion __instance)
+        {
+            if (__instance.harmless || __instance.enemy || __instance.damage <= 0 || Bridge.I == null) return;
+            var at = __instance.transform.position;
+            float reach = Mathf.Max(__instance.maxSize, 1f);
+            var hit = HitColliders(__instance);
+            foreach (var p in Bridge.I.ProxyList())
+            {
+                if (p == null || p.eid == null || p.type == "v1" || p.body == null) continue;
+                var near = p.body.ClosestPoint(at);
+                float d = Vector3.Distance(at, near);
+                if (d > reach) continue;
+                if (d > 0.5f && Physics.Linecast(at, near, LayerMaskDefaults.Get(LMD.Environment), QueryTriggerInteraction.Ignore)) continue;
+                var root = p.eid.GetComponent<Collider>();
+                if (root != null && hit != null && !hit.Add(root.GetInstanceID())) continue;
+                float dmg = __instance.damage / 10f * __instance.enemyDamageMultiplier * Mathf.Lerp(1f, 0.35f, d / reach);
+                p.eid.hitter = "explosion";
+                p.eid.DeliverDamage(p.body.gameObject, Vector3.zero, near, dmg, false, 0f, __instance.sourceWeapon, false, true);
+            }
+        }
+    }
+
     /// <summary>Gasoline landing on Minecraft's blocks shows there (Minecraft paints it).</summary>
     [HarmonyPatch(typeof(GasolineStain), nameof(GasolineStain.AttachTo))]
     static class OilOnBlocks

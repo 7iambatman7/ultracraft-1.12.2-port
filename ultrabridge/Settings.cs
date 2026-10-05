@@ -71,6 +71,9 @@ namespace UltraBridge
                     if (a.Length >= 2) { PendingBinds[a[0]] = a[1]; if (levelPrepared) ApplyBinds(); }
                     break;
                 }
+                case "SKY":
+                    HandleSky(rest);
+                    break;
                 case "GUN":
                 {
                     // GUN <slot 1-6> <colour 0 blue, 1 green, 2 red>: a weapon's own key (Minecraft's ULTRAKILL Controls)

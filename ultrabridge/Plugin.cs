@@ -446,6 +446,7 @@ namespace UltraBridge
                 {
                     UpdateUkEnemies(nm);
                     UpdateNavMesh(nm);
+                    UnstickEnemies();
                     KeepGroundHonest(nm);
                     ApplyEffects(nm);
                     TrackFall(nm);
@@ -965,6 +966,7 @@ namespace UltraBridge
             // hold V1 still until Minecraft has sent the ground and a start position
             nm.rb.isKinematic = true;
             levelPrepared = true;
+            ApplySky();
             Net.Send("READY");
             PrefsOnReady();
             Plugin.Log.LogInfo("level prepared, hid " + hidden + " renderers/colliders");
@@ -2291,7 +2293,8 @@ namespace UltraBridge
         Vector3 navCenter;
         bool navDirty = true, navBaking;
         float nextNavBake, navStarted;
-        const float NavRadiusBlocks = 40f, NavHeightBlocks = 48f;
+        // (wide enough that enemies coming from afar have ground to walk on before they reach V1)
+        const float NavRadiusBlocks = 56f, NavHeightBlocks = 56f;
 
         void MarkNavDirty(Bounds changed)
         {
@@ -3271,6 +3274,7 @@ namespace UltraBridge
             fixedSteps++;
             // a physics step while paused means something gave time back: stop it again before anything moves
             if (mcPaused) HoldPause();
+            else if (levelPrepared && v1Landed) StepUp(MonoSingleton<NewMovement>.Instance);
         }
 
         /// <summary>Debug: the frame exactly as Minecraft gets it (colour, mask), and how many "ghost" pixels it has:

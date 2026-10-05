@@ -56,6 +56,15 @@ public final class ServerOps {
 
 	private ServerOps() {}
 
+	/**
+	 * Whether V1's (or, enemy, ULTRAKILL's enemies') attacks break blocks here: as the settings say, but never in the
+	 * Cyber Grind's arenas.
+	 */
+	static boolean breaks(Level level, boolean enemy) {
+		if (level.dimension() == GrindArenas.DIMENSION) return false;
+		return enemy ? UltracraftConfig.enemyBlockDamage : UltracraftConfig.playerBlockDamage;
+	}
+
 	static State state(ServerPlayer sp) {
 		return STATES.computeIfAbsent(sp.getUUID(), k -> new State());
 	}
@@ -217,12 +226,12 @@ public final class ServerOps {
 				float power = Math.min(16f, Float.parseFloat(a[4]) / 12.5f);
 				slamHurt(sp, level, x, y, z, 1.5 + Math.max(0f, power) * 0.4);
 				if (power < 1f) return;
-				Level.ExplosionInteraction blocks = UltracraftConfig.playerBlockDamage ? Level.ExplosionInteraction.TNT : Level.ExplosionInteraction.NONE;
+				Level.ExplosionInteraction blocks = breaks(level, false) ? Level.ExplosionInteraction.TNT : Level.ExplosionInteraction.NONE;
 				level.explode(sp, null, V1_BLAST, x, y - 0.5, z, power, false, blocks, ParticleTypes.EXPLOSION, ParticleTypes.EXPLOSION_EMITTER, BLAST_DEBRIS, SoundEvents.GENERIC_EXPLODE);
 			}
 			case "RAIL" -> {
 				// RAIL x y z dx dy dz length radius: the Electric railcannon bores through the terrain
-				if (!UltracraftConfig.playerBlockDamage) return;
+				if (!breaks(level, false)) return;
 				Vec3 point = new Vec3(Double.parseDouble(a[1]), Double.parseDouble(a[2]), Double.parseDouble(a[3]));
 				Vec3 dir = new Vec3(Double.parseDouble(a[4]), Double.parseDouble(a[5]), Double.parseDouble(a[6])).normalize();
 				BlockDamage.tunnel(level, sp, point, dir, Float.parseFloat(a[7]), Float.parseFloat(a[8]));
@@ -233,8 +242,7 @@ public final class ServerOps {
 				double x = Double.parseDouble(a[1]), y = Double.parseDouble(a[2]), z = Double.parseDouble(a[3]);
 				String kind = a.length > 5 ? a[5] : "";
 				float size = Float.parseFloat(a[4]);
-				Level.ExplosionInteraction blocks = (kind.equals("e") ? UltracraftConfig.enemyBlockDamage : UltracraftConfig.playerBlockDamage)
-					? Level.ExplosionInteraction.TNT : Level.ExplosionInteraction.NONE;
+				Level.ExplosionInteraction blocks = breaks(level, kind.equals("e")) ? Level.ExplosionInteraction.TNT : Level.ExplosionInteraction.NONE;
 				if (kind.equals("2")) {
 					// the mini nuke: a burning crater twice anything else's size, hurting every mob caught in it
 					float power = Math.max(18f, Math.min(UltracraftConfig.opShop ? 48f : 24f, size * 2f));
@@ -254,13 +262,13 @@ public final class ServerOps {
 				float radius = a.length > 8 ? Float.parseFloat(a[8]) : 0f;
 				Vec3 aim = a.length > 11 ? new Vec3(Double.parseDouble(a[9]), Double.parseDouble(a[10]), Double.parseDouble(a[11])).normalize() : dir.normalize();
 				boolean enemy = a.length > 12 && a[12].equals("e");
-				if (!(enemy ? UltracraftConfig.enemyBlockDamage : UltracraftConfig.playerBlockDamage)) return;
+				if (!breaks(level, enemy)) return;
 				BlockDamage.clearPlants(level, sp, point, aim, Math.min(64.0, point.distanceTo(sp.getEyePosition()) + 1.0));
 				BlockDamage.hit(level, sp, point, dir.normalize(), damage, radius);
 			}
 			case "FIRE" -> {
 				// burning gasoline, or a Streetcleaner's flames ("e"): Minecraft fire there
-				if (!(a.length > 4 && a[4].equals("e") ? UltracraftConfig.enemyBlockDamage : UltracraftConfig.playerBlockDamage)) return;
+				if (!breaks(level, a.length > 4 && a[4].equals("e"))) return;
 				BlockPos p = BlockPos.containing(Double.parseDouble(a[1]), Double.parseDouble(a[2]), Double.parseDouble(a[3]));
 				for (BlockPos c : new BlockPos[] {p, p.above(), p.below()}) {
 					if (level.getBlockState(c).isAir() && BaseFireBlock.canBePlacedAt(level, c, Direction.UP)) {

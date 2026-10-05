@@ -123,6 +123,24 @@ namespace UltraBridge
         {
             switch (cmd)
             {
+                case "WORLDRESET":
+                {
+                    // Minecraft left its world: nothing of that world's carries over to the next one (its own GEAR,
+                    // EQUIPS and UPGRADES come when V1 is there); until then V1 starts as a new world's V1 would
+                    UcMoney = 0;
+                    UcGear.Clear();
+                    UcGear.Add("rev0");
+                    UcGear.Add("arm0");
+                    UcAllGear = false;
+                    Equips.Clear();
+                    foreach (var t in UcUp.Values) t.level = 1;
+                    gearKnown = false;
+                    HandleSky("-");
+                    if (levelPrepared) RefreshLoadout();
+                    UpgradeTexts();
+                    Plugin.Log.LogInfo("world left: progress reset until the next world's comes");
+                    break;
+                }
                 case "GEAR":
                 {
                     // GEAR money all|gear,gear,...: what V1 has in this world
@@ -209,7 +227,7 @@ namespace UltraBridge
                 case "BOSSINFO":
                 {
                     // debug: the bosses here and how they are
-                    var sb = new StringBuilder("BOSSINFO n=" + bosses.Count + " money=" + UcMoney + " all=" + UcAllGear + " gear=" + string.Join(",", UcGear));
+                    var sb = new StringBuilder("BOSSINFO v2s=" + FindObjectsOfType<V2>().Length + " n=" + bosses.Count + " money=" + UcMoney + " all=" + UcAllGear + " gear=" + string.Join(",", UcGear));
                     foreach (var f in bosses.Values)
                     {
                         sb.Append(" | ").Append(f.id).Append(' ').Append(f.key);
@@ -1297,4 +1315,58 @@ namespace UltraBridge
             if (Bridge.AllWeapons) __result = true;
         }
     }
+
+    /// <summary>V2 dying for good. ULTRAKILL's V2 never does (1-4's flees, 4-4's is knocked out), so its standard
+    /// death leaves it out: no ragdoll, nothing removed, it just stood there. Here it goes limp the way other machines do
+    /// (its animator off, its limbs falling); a model with no limbs to drop bursts apart instead and is gone.</summary>
+    [HarmonyPatch(typeof(Enemy), nameof(Enemy.GoLimp), new[] { typeof(bool) })]
+    static class V2Dies
+    {
+        static void Postfix(Enemy __instance)
+        {
+            var v2 = __instance != null ? __instance.GetComponent<V2>() : null;
+            if (v2 == null || v2.dontDie || __instance.GetComponent<V2Dead>() != null) return;
+            __instance.gameObject.AddComponent<V2Dead>();
+            try
+            {
+                v2.enabled = false;
+                var root = __instance.gameObject;
+                var limbs = new List<Rigidbody>();
+                foreach (var rb in root.GetComponentsInChildren<Rigidbody>(true)) if (rb.gameObject != root) limbs.Add(rb);
+                if (limbs.Count >= 3)
+                {
+                    foreach (var anim in root.GetComponentsInChildren<Animator>(true)) UnityEngine.Object.Destroy(anim);
+                    var col = root.GetComponent<Collider>();
+                    if (col != null) UnityEngine.Object.Destroy(col);
+                    var body = root.GetComponent<Rigidbody>();
+                    if (body != null) UnityEngine.Object.Destroy(body);
+                    foreach (var rb in limbs)
+                    {
+                        if (rb == null) continue;
+                        rb.isKinematic = false;
+                        rb.useGravity = true;
+                        rb.AddForce(UnityEngine.Random.onUnitSphere * 4f + Vector3.up * 3f, ForceMode.VelocityChange);
+                    }
+                    Plugin.Log.LogInfo("V2 died: ragdoll, " + limbs.Count + " limbs");
+                    return;
+                }
+                // no limbs to drop: what ULTRAKILL does with a V2 that isn't a boss, every part hit apart, and gone
+                var eid = __instance.GetComponent<EnemyIdentifier>() ?? root.GetComponentInChildren<EnemyIdentifier>();
+                if (eid != null)
+                {
+                    foreach (var part in root.GetComponentsInChildren<EnemyIdentifierIdentifier>())
+                    {
+                        try { eid.DeliverDamage(part.gameObject, Vector3.zero, part.transform.position, 10f, false); }
+                        catch (Exception) { }
+                    }
+                }
+                Plugin.Log.LogInfo("V2 died: burst apart");
+                root.SetActive(false);
+                UnityEngine.Object.Destroy(root);
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("V2 death: " + e); }
+        }
+    }
+
+    class V2Dead : MonoBehaviour { }
 }

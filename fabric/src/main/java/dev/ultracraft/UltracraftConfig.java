@@ -79,6 +79,8 @@ public final class UltracraftConfig {
 	public static boolean styleRewards = true;
 	/** ULTRAKILL arenas generate in new parts of the world, each with a boss waiting. */
 	public static boolean arenas = true;
+	/** The Cyber Grind takes V1 through its own arenas (GrindArenas) instead of fighting round the shop. */
+	public static boolean grindArenas = true;
 	/** Low-Latency Frames: ULTRAKILL hands each frame over as soon as it's drawn (less delay, a little less throughput). */
 	public static boolean lowLatency = true;
 	/** Cheats (UcCheats) switched on: id -> on. */
@@ -86,7 +88,7 @@ public final class UltracraftConfig {
 
 	private static final String[] KEYS = {"v1Height", "autoV1", "ukSpawns", "mcMobs", "sharpShop", "grindBest", "bosses", "bossMinutes", "bossDifficulty", "traitChance", "bossWarnSeconds",
 		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFpsCap", "steveEnemies", "fightMusic", "bossThemes",
-		"calmMusic", "hushMcMusic", "styleRewards", "arenas", "lowLatency"};
+		"calmMusic", "hushMcMusic", "styleRewards", "arenas", "grindArenas", "lowLatency"};
 
 	private static final String COMMENT = "Ultracraft (most of this is on the Ultracraft settings screen): v1Height = ULTRAKILL render height (0 = full window, lower = faster);"
 		+ " autoV1 = become V1 automatically; ukSpawns = ULTRAKILL's enemies spawn in the dark; mcMobs = Minecraft's monsters spawn;"
@@ -94,7 +96,7 @@ public final class UltracraftConfig {
 		+ " bossMinutes = minutes of play between them; bossDifficulty = 0 by bosses beaten, 1-5 EASY to V1 MUST DIE; traitChance = percent of bosses with traits; bossWarnSeconds = warning before one arrives; allGear = every weapon without buying it;"
 		+ " playerBlockDamage / enemyBlockDamage = V1's / enemies' attacks break blocks; impactFrames = hitstop length (0.1 to 3);"
 		+ " launchUltrakill = start ULTRAKILL with Minecraft; opShop = upgrades go to 1500%; uk.* = ULTRAKILL settings used while playing Ultracraft;"
-		+ " fightMusic = off, random or a song of ULTRAKILL's soundtrack; cheat.* = cheats on; arenas = ULTRAKILL arenas generate in new chunks";
+		+ " fightMusic = off, random or a song of ULTRAKILL's soundtrack; cheat.* = cheats on; arenas = ULTRAKILL arenas generate in new chunks; grindArenas = the Cyber Grind runs through its own 50 arenas";
 
 	private UltracraftConfig() {}
 
@@ -158,6 +160,7 @@ public final class UltracraftConfig {
 			hushMcMusic = bool(p, "hushMcMusic", hushMcMusic);
 			styleRewards = bool(p, "styleRewards", styleRewards);
 			arenas = bool(p, "arenas", arenas);
+			grindArenas = bool(p, "grindArenas", grindArenas);
 			lowLatency = bool(p, "lowLatency", lowLatency);
 			ukPrefs.clear();
 			for (String k : p.stringPropertyNames()) {
@@ -203,6 +206,7 @@ public final class UltracraftConfig {
 		p.setProperty("hushMcMusic", Boolean.toString(hushMcMusic));
 		p.setProperty("styleRewards", Boolean.toString(styleRewards));
 		p.setProperty("arenas", Boolean.toString(arenas));
+		p.setProperty("grindArenas", Boolean.toString(grindArenas));
 		p.setProperty("lowLatency", Boolean.toString(lowLatency));
 		for (var e : cheats.entrySet()) p.setProperty("cheat." + e.getKey(), Boolean.toString(e.getValue()));
 		for (var e : ukPrefs.entrySet()) p.setProperty("uk." + e.getKey(), e.getValue());

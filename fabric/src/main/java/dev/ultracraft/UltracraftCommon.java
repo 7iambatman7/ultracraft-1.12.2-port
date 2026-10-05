@@ -75,6 +75,9 @@ public final class UltracraftCommon implements ModInitializer {
 	public void onInitialize() {
 		FabricDefaultAttributeRegistry.register(UK_ENEMY, Mob.createMobAttributes());
 		ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.FUNCTIONAL_BLOCKS).register(entries -> entries.accept(UK_SHOP_ITEM));
+		// the Cyber Grind's arenas can't be dug into (or their shop taken away), except in creative
+		net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) ->
+			level.dimension() != GrindArenas.DIMENSION || player.isCreative());
 		// hostile mobs (zombies, skeletons, spiders, creepers...) also go for ULTRAKILL's enemies, as they would for a
 		// player; golems already attack anything that's an Enemy
 		ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {

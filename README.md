@@ -24,6 +24,10 @@ Commands: `/uc help`.
 Stuck on "ULTRAKILL connected - loading V1..."? Update to the latest release: older ones waited forever on an ULTRAKILL
 save that hadn't finished the tutorial. The message now names the ULTRAKILL level it's waiting in.
 
+Minecraft crashes at launch with "Unsupported class file major version 65"? Your Fabric Loader is too old for
+Minecraft 1.21.11: run the latest Fabric installer (https://fabricmc.net/use/installer/), install the newest loader
+(0.19 or later) for 1.21.11, and start that profile.
+
 ## Settings
 
 **Ultracraft...** (title screen, pause menu, Options, or `/uc settings`) has a page for each of these:
@@ -125,6 +129,14 @@ Your own ULTRAKILL save is never written: progress lives in the Minecraft world.
 Place it and walk up to it as V1: ULTRAKILL's shop terminal, where you spend P on weapons, variants and upgrades. The
 revolver, shotgun and nailgun pages have an **ALTERNATE** button: it buys the alternate version, and after that switches
 the weapon between standard and alternate.
+
+**The Cyber Grind** starts from the shop's Cyber Grind page. With **Cyber Grind Arenas** on (Enemies & Bosses), you
+and the other V1s by the shop go into the Grind's own arenas: 50 of them, each after one of ULTRAKILL's levels or
+layers, under that layer's ULTRAKILL sky. Every 5 waves the run moves on to the next arena, and every 15th wave is a
+boss. The arenas can't be broken. Each has a temporary shop near its edge, under a column of lights (the chat says
+which way): **Leave** on its Cyber Grind page takes everyone back to where they started. `/uc grind arena <1-50>` jumps
+straight to an arena, `/uc grind stop` ends the run. With the setting off, the waves come round the shop you started
+from.
 
 ## Build from source
 

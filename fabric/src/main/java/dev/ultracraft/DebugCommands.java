@@ -26,8 +26,14 @@ final class DebugCommands {
 
 	private DebugCommands() {}
 
+	/**
+	 * Only in a Minecraft started for testing (-Dultracraft.debug=true): any other one, a player's own game included,
+	 * never runs what's in the file.
+	 */
+	private static final boolean ENABLED = Boolean.getBoolean("ultracraft.debug");
+
 	static void tick(Minecraft mc) {
-		if (++tick % 5 != 0 || !Files.exists(FILE)) return;
+		if (!ENABLED || ++tick % 5 != 0 || !Files.exists(FILE)) return;
 		List<String> lines;
 		try {
 			lines = Files.readAllLines(FILE);

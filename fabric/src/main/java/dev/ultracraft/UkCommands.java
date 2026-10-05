@@ -163,14 +163,27 @@ final class UkCommands {
 				}))))
 			.then(Commands.literal("bosses")
 				.then(Commands.literal("on").executes(c -> bosses(c, true)))
-				.then(Commands.literal("off").executes(c -> bosses(c, false))));
+				.then(Commands.literal("off").executes(c -> bosses(c, false))))
+			// the Cyber Grind's arenas, straight to one (its waves start as usual), or out of them
+			.then(Commands.literal("grind")
+				.then(Commands.literal("arena").then(Commands.argument("number", IntegerArgumentType.integer(1, GrindArenas.ARENAS.size())).executes(c -> {
+					ServerPlayer sp = player(c);
+					if (CyberGrind.running) return fail(c, "The Cyber Grind is already running: /uc grind stop first.");
+					if (!CyberGrind.startArenas(sp, IntegerArgumentType.getInteger(c, "number") - 1)) return fail(c, "Become V1 first.");
+					return say(c, "Into the Cyber Grind's arena " + IntegerArgumentType.getInteger(c, "number") + ".");
+				})))
+				.then(Commands.literal("stop").executes(c -> {
+					if (!CyberGrind.running) return fail(c, "The Cyber Grind isn't running.");
+					CyberGrind.stop(player(c), "stopped");
+					return say(c, "The Cyber Grind stopped.");
+				})));
 		var node = d.register(root);
 		d.register(Commands.literal("ultracraft").executes(c -> help(c)).redirect(node));
 	}
 
 	private static int help(CommandContext<CommandSourceStack> c) {
 		return say(c, "/uc p [add|take|set <amount>]\n/uc weapons all|none|list|give <gear>|take <gear>\n/uc upgrades max|reset|list|set <upgrade> <level>\n/uc settings"
-			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off");
+			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind arena <1-50>|stop");
 	}
 
 	private static ServerPlayer player(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {

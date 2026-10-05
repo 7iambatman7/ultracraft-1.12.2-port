@@ -108,6 +108,8 @@ final class UkSpawns {
 	static void tick(ServerPlayer sp) {
 		if (!UltracraftConfig.ukSpawns) return;
 		ServerLevel level = sp.level();
+		// the Cyber Grind's arenas have only its waves
+		if (level.dimension() == GrindArenas.DIMENSION) return;
 		if (level.getDifficulty() == Difficulty.PEACEFUL) return;
 		if (!level.getGameRules().get(GameRules.SPAWN_MOBS) || !level.getGameRules().get(GameRules.SPAWN_MONSTERS)) return;
 		int cap = switch (level.getDifficulty()) {

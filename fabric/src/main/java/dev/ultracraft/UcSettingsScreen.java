@@ -171,6 +171,8 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 				v -> v == 0 ? "Auto" : UkBosses.DIFFICULTY[v - 1], v -> UltracraftConfig.bossDifficulty = v),
 			slider("Trait Chance", "How often a boss comes with traits (modifiers such as Radiant or Volatile); about a quarter of those bring two.", 0, 100,
 				UltracraftConfig.traitChance, v -> v + "%", v -> UltracraftConfig.traitChance = v),
+			bool("Cyber Grind Arenas", "Starting the Cyber Grind at a shop takes you into its own arenas: 50 of them, each after one of ULTRAKILL's levels, the next one once you've cleared its waves. Each has a temporary shop somewhere: its screen takes you back. Off: the waves come round the shop you started it from.",
+				UltracraftConfig.grindArenas, v -> UltracraftConfig.grindArenas = v),
 			bool("ULTRAKILL Arenas", "Arenas themed after ULTRAKILL's layers of Hell generate in new parts of the world, each with a boss waiting inside.",
 				UltracraftConfig.arenas, v -> UltracraftConfig.arenas = v),
 			bool("ULTRAKILL While Steve", "Back as Steve (F8), ULTRAKILL's enemies stay and keep fighting: you see them, and they come for Steve. Off: they wait, frozen, until you're V1 again.",

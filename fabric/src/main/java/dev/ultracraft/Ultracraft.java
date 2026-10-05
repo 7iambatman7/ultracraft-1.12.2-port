@@ -413,6 +413,8 @@ public final class Ultracraft implements ClientModInitializer {
 	// ------------------------------------------------------------------ per tick
 
 	private static boolean startedFullscreen;
+	/** In a world (its progress asked for); leaving one resets ULTRAKILL's. */
+	private static boolean inWorld;
 
 	/** Ultracraft starts in windowed fullscreen (Minecraft's fullscreen is borderless, see WindowMixin); F11 toggles. */
 	private static void startFullscreen(Minecraft mc) {
@@ -459,6 +461,16 @@ public final class Ultracraft implements ClientModInitializer {
 			// out of the world: Steve's view and V1's history start over
 			steveView = false;
 			everActive = false;
+			// and nothing of its P, gear or upgrades goes on to the next world
+			if (inWorld) {
+				inWorld = false;
+				UkProgress.shownMoney = 0;
+				if (UkLink.connected) UkLink.send("WORLDRESET");
+			}
+		} else if (!inWorld && mc.player != null) {
+			// into a world: its own P, gear and upgrades, straight away
+			inWorld = true;
+			if (UkLink.connected) UcNet.toServer("PROGRESS");
 		}
 		if (p == null || mc.level == null) return;
 		safely("blood", () -> BloodStains.tick(mc.level));
@@ -473,6 +485,8 @@ public final class Ultracraft implements ClientModInitializer {
 		if (p != lastPlayer) {
 			// respawned or changed dimension: put V1 where Minecraft put us
 			lastPlayer = p;
+			// out of the Cyber Grind's arenas (however: died, left), ULTRAKILL's sky over them goes
+			if (p.level().dimension() != GrindArenas.DIMENSION && UkLink.connected) UkLink.send("SKY -");
 			if (active) {
 				UkLink.send("RESPAWN");
 				teleportV1(p);

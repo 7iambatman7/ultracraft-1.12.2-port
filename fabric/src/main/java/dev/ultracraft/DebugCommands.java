@@ -99,6 +99,14 @@ final class DebugCommands {
 				Ultracraft.lastInputAt = System.currentTimeMillis();
 				Ultracraft.runOnServer(mc, (server, sp) -> UkBosses.force(sp, key, secs, mods));
 			}
+			// ukbind <Map/Action[/part]> <glfw key | -1-mouse button | ->: rebind one of ULTRAKILL's controls
+			case "ukbind" -> {
+				if (a[2].equals("-")) UltracraftConfig.ukBinds.remove(a[1]);
+				else UltracraftConfig.ukBinds.put(a[1], Integer.parseInt(a[2]));
+				UkLink.send("UKBIND " + a[1] + " " + a[2]);
+			}
+			// lanoffline: the hosted world stops checking players' Mojang sessions (testing with offline accounts)
+			case "lanoffline" -> Ultracraft.runOnServer(mc, (server, sp) -> server.setUsesAuthentication(false));
 			// opshop 0|1: the OP Shop setting (every player's Upgrades page hears it)
 			case "opshop" -> {
 				UltracraftConfig.opShop = a.length > 1 && a[1].equals("1");

@@ -2941,6 +2941,8 @@ namespace UltraBridge
             wheel = 0;
         }
 
+        internal static Key GlfwKey(int g) => GlfwToKey(g);
+
         static Key GlfwToKey(int g)
         {
             if (g >= 65 && g <= 90) return Key.A + (g - 65);
@@ -2959,6 +2961,22 @@ namespace UltraBridge
                 case 259: return Key.Backspace;
                 case 96: return Key.Backquote;
                 case 290: return Key.F1;
+                case 346: return Key.RightAlt;
+                case 280: return Key.CapsLock;
+                case 262: return Key.RightArrow;
+                case 263: return Key.LeftArrow;
+                case 264: return Key.DownArrow;
+                case 265: return Key.UpArrow;
+                case 44: return Key.Comma;
+                case 46: return Key.Period;
+                case 47: return Key.Slash;
+                case 59: return Key.Semicolon;
+                case 39: return Key.Quote;
+                case 45: return Key.Minus;
+                case 61: return Key.Equals;
+                case 91: return Key.LeftBracket;
+                case 93: return Key.RightBracket;
+                case 92: return Key.Backslash;
                 default: return Key.None;
             }
         }

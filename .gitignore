@@ -18,3 +18,4 @@ dist/
 # screenshots of the game
 docs/*.png
 docs/*.webp
+/prodtest*/

@@ -50,6 +50,10 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 	/** The "Ultracraft" button on the pause menu, the title screen and Minecraft's Options. */
 	static void register() {
 		ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> {
+			// why a connection ended goes in the log too (the screen alone is lost once closed)
+			if (screen instanceof net.minecraft.client.gui.screens.DisconnectedScreen) {
+				org.slf4j.LoggerFactory.getLogger("ultracraft").info("[disconnected] {}", screen.getNarrationMessage().getString());
+			}
 			if (screen instanceof PauseScreen || screen instanceof OptionsScreen || screen instanceof TitleScreen) {
 				Screens.getButtons(screen).add(Button.builder(Component.literal("Ultracraft..."), b -> mc.setScreen(new UcSettingsScreen(screen)))
 					.bounds(4, 4, 90, 20).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Ultracraft and ULTRAKILL settings"))).build());
@@ -95,6 +99,7 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 				UltracraftConfig.sharpShop, v -> UltracraftConfig.sharpShop = v),
 			bool("Start ULTRAKILL", "Starting Minecraft starts ULTRAKILL too (through Steam), and closing Minecraft closes it.", UltracraftConfig.launchUltrakill,
 				v -> UltracraftConfig.launchUltrakill = v));
+		list.addSmall(Button.builder(Component.literal("ULTRAKILL Controls..."), b -> minecraft.setScreen(new UcKeybindsScreen(this))).width(150).build(), null);
 		List<OptionInstance<?>> uk = new ArrayList<>();
 		for (UkPref p : UK_PREFS) uk.add(ukOption(p));
 		list.addSmall(uk.toArray(new OptionInstance[0]));

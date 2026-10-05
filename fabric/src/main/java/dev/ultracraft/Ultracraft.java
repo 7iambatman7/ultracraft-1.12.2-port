@@ -94,6 +94,11 @@ public final class Ultracraft implements ClientModInitializer {
 	public static double mouseDx, mouseDy;
 	private static double lastCursorX, lastCursorY;
 	private static boolean haveCursor;
+	/** Ultracraft's own keys (V1/Steve, hands): never given up to a rebind. */
+	public static boolean isOwnKey(KeyMapping k) {
+		return k == toggle || k == handsKey;
+	}
+
 	private static KeyMapping toggle;
 	private static KeyMapping handsKey;
 	private static boolean frozen;
@@ -120,6 +125,10 @@ public final class Ultracraft implements ClientModInitializer {
 		k.add(GLFW.GLFW_KEY_RIGHT_CONTROL);
 		k.add(GLFW.GLFW_KEY_LEFT_ALT);
 		k.add(GLFW.GLFW_KEY_TAB);
+		// keys only a rebind would use
+		for (int c : new int[] {GLFW.GLFW_KEY_RIGHT_ALT, GLFW.GLFW_KEY_CAPS_LOCK, GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN,
+			GLFW.GLFW_KEY_COMMA, GLFW.GLFW_KEY_PERIOD, GLFW.GLFW_KEY_SLASH, GLFW.GLFW_KEY_SEMICOLON, GLFW.GLFW_KEY_APOSTROPHE, GLFW.GLFW_KEY_MINUS,
+			GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_LEFT_BRACKET, GLFW.GLFW_KEY_RIGHT_BRACKET, GLFW.GLFW_KEY_BACKSLASH}) k.add(c);
 		KEYS = k.stream().mapToInt(Integer::intValue).toArray();
 	}
 
@@ -565,7 +574,7 @@ public final class Ultracraft implements ClientModInitializer {
 			UcNet.toServer(msg);
 		} else if (msg.startsWith("UI ")) {
 			setUiMode(mc, msg.endsWith("1"));
-		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO) .*")) {
+		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO) .*")) {
 			// debug answers (DebugCommands "uk ...")
 			org.slf4j.LoggerFactory.getLogger("ultracraft").info("[uk] {}", msg);
 		} else if (msg.startsWith("SHOPZONE ")) {

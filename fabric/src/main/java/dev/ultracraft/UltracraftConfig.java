@@ -56,6 +56,8 @@ public final class UltracraftConfig {
 	 * never written into ULTRAKILL's own settings files. Key = ULTRAKILL's pref name.
 	 */
 	public static final Map<String, String> ukPrefs = new TreeMap<>();
+	/** ULTRAKILL's controls rebound (UcKeybindsScreen): action -> GLFW key, or -1 - mouse button. */
+	public static final Map<String, Integer> ukBinds = new TreeMap<>();
 
 	private static final String[] KEYS = {"v1Height", "autoV1", "ukSpawns", "mcMobs", "sharpShop", "grindBest", "bosses", "bossMinutes", "bossWarnSeconds",
 		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFps"};
@@ -121,6 +123,7 @@ public final class UltracraftConfig {
 			ukPrefs.clear();
 			for (String k : p.stringPropertyNames()) {
 				if (k.startsWith("uk.")) ukPrefs.put(k.substring(3), p.getProperty(k).trim());
+				if (k.startsWith("bind.")) ukBinds.put(k.substring(5), Integer.parseInt(p.getProperty(k).trim()));
 			}
 			if (!complete) save();
 		} catch (Exception e) {
@@ -152,6 +155,7 @@ public final class UltracraftConfig {
 		p.setProperty("opShop", Boolean.toString(opShop));
 		p.setProperty("ukFps", Integer.toString(ukFps));
 		for (var e : ukPrefs.entrySet()) p.setProperty("uk." + e.getKey(), e.getValue());
+		for (var e : ukBinds.entrySet()) p.setProperty("bind." + e.getKey(), Integer.toString(e.getValue()));
 		try {
 			Path file = file();
 			Files.createDirectories(file.getParent());
@@ -167,5 +171,6 @@ public final class UltracraftConfig {
 	public static void sendOpts() {
 		UkLink.send(String.format(Locale.ROOT, "OPTS impact=%.2f fps=%d playerBlocks=%d enemyBlocks=%d", impactFrames, ukFps, playerBlockDamage ? 1 : 0, enemyBlockDamage ? 1 : 0));
 		for (var e : ukPrefs.entrySet()) UkLink.send("UKPREF " + e.getKey() + " " + e.getValue());
+		for (var e : ukBinds.entrySet()) UkLink.send("UKBIND " + e.getKey() + " " + e.getValue());
 	}
 }

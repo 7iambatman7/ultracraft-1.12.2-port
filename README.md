@@ -32,7 +32,22 @@ Two games run at once and share your graphics card. In **Ultracraft...** setting
 Also: Minecraft render distance 8-12 chunks, and Sodium (Fabric) helps Minecraft's side. ULTRAKILL's own
 graphics options (in ULTRAKILL itself) apply too.
 
-Multiplayer: open a world to LAN; everyone needs ULTRAKILL plus both mods.
+## Multiplayer
+
+Everyone plays with their own ULTRAKILL (it starts by itself when Minecraft does), and everyone needs the same mods.
+
+- **Easiest: [Essential](https://essential.gg)** (Fabric, 1.21.11) in the mods folder: host your world from Essential's
+  menu and invite your friends; they join from their invites. Works with Ultracraft out of the box.
+- Or **Open to LAN** from the pause menu (same network, or with a tunnel such as playit.gg).
+
+You share the world and the fight: each player's ULTRAKILL runs the enemies around them, and the others see and hit
+them too. Other players show up as V1. Each player has their own P, gear and upgrades.
+
+## Controls
+
+**Ultracraft... → ULTRAKILL Controls...** rebinds ULTRAKILL's keys (movement, dash, slide, fire, punch, arm, whiplash,
+weapons...). Click an action, press the key or mouse button; Esc cancels. Minecraft's own action on that key steps aside
+while you're V1 with guns out. F8 switches V1/Steve and V switches guns/Minecraft hands.
 
 Your own ULTRAKILL save is never written: progress lives in the Minecraft world.
 

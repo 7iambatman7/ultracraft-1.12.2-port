@@ -48,6 +48,30 @@ namespace UltraBridge
                         if (p[0] == "fps" && int.TryParse(p[1], out var fps)) FpsCap = Mathf.Clamp(fps, 30, 240);
                     }
                     break;
+                case "UKBIND":
+                {
+                    // UKBIND Map/Action[/part] <glfw key | -1-mouse button | ->: rebind one of ULTRAKILL's controls (runtime only)
+                    var a = rest.Trim().Split(' ');
+                    if (a.Length >= 2) { PendingBinds[a[0]] = a[1]; if (levelPrepared) ApplyBinds(); }
+                    break;
+                }
+                case "BINDINFO":
+                {
+                    // debug: where ULTRAKILL's controls are bound now (overrides included)
+                    var im = levelPrepared ? MonoSingleton<InputManager>.Instance : null;
+                    var asset = im != null && im.InputSource != null ? im.InputSource.Actions.asset : null;
+                    var sb = new System.Text.StringBuilder("BINDINFO pending=" + PendingBinds.Count);
+                    if (asset != null)
+                        foreach (var name in new[] { "Movement/Move", "Movement/Jump", "Movement/Dodge", "Fist/Punch", "Weapon/PrimaryFire", "Weapon/Revolver" })
+                        {
+                            var act = asset.FindAction(name);
+                            if (act == null) continue;
+                            sb.Append(" | ").Append(name).Append(':');
+                            foreach (var b in act.bindings) if (!b.isComposite && b.effectivePath.StartsWith("<")) sb.Append(' ').Append(b.name).Append('=').Append(b.effectivePath);
+                        }
+                    Net.Send(sb.ToString());
+                    break;
+                }
                 case "UKPREF":
                 {
                     // UKPREF key type:value
@@ -94,8 +118,53 @@ namespace UltraBridge
 
         /// <summary>The level is ready: every setting Ultracraft has made applies (again), and Minecraft hears the
         /// stored ones for its settings screen.</summary>
+        static readonly Dictionary<string, string> PendingBinds = new Dictionary<string, string>();
+
+        /// <summary>The rebound controls as overrides on ULTRAKILL's own bindings (never saved to its files).</summary>
+        void ApplyBinds()
+        {
+            var im = MonoSingleton<InputManager>.Instance;
+            var asset = im != null && im.InputSource != null ? im.InputSource.Actions.asset : null;
+            if (asset == null) return;
+            foreach (var kv in PendingBinds)
+            {
+                try
+                {
+                    var parts = kv.Key.Split('/');
+                    if (parts.Length < 2) continue;
+                    var action = asset.FindAction(parts[0] + "/" + parts[1]);
+                    if (action == null) continue;
+                    string part = parts.Length > 2 ? parts[2] : null;
+                    string path = null;
+                    if (kv.Value != "-" && int.TryParse(kv.Value, out var code))
+                    {
+                        if (code < 0) path = "<Mouse>/" + (code == -1 ? "leftButton" : code == -2 ? "rightButton" : "middleButton");
+                        else
+                        {
+                            var key = GlfwKey(code);
+                            var kb = UnityEngine.InputSystem.InputSystem.GetDevice<UnityEngine.InputSystem.Keyboard>();
+                            if (key != UnityEngine.InputSystem.Key.None && kb != null) path = "<Keyboard>/" + kb[key].name;
+                        }
+                    }
+                    for (int i = 0; i < action.bindings.Count; i++)
+                    {
+                        var b = action.bindings[i];
+                        if (b.isComposite) continue;
+                        if (part != null ? !(b.isPartOfComposite && b.name == part) : b.isPartOfComposite) continue;
+                        var p = b.path ?? "";
+                        if (!p.StartsWith("<Keyboard>") && !p.StartsWith("<Mouse>")) continue;
+                        if (path == null) UnityEngine.InputSystem.InputActionRebindingExtensions.RemoveBindingOverride(action, i);
+                        else UnityEngine.InputSystem.InputActionRebindingExtensions.ApplyBindingOverride(action, i, path);
+                        break;
+                    }
+                }
+                catch (Exception e) { Plugin.Log.LogWarning("bind " + kv.Key + ": " + e.Message); }
+            }
+        }
+
         void PrefsOnReady()
         {
+            ApplyBinds();
             foreach (var kv in PrefOverrides) ApplyPref(kv.Key, kv.Value);
             var pm = MonoSingleton<PrefsManager>.Instance;
             if (pm == null) return;

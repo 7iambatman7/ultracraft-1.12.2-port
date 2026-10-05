@@ -15,7 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * As V1, Minecraft's keys still work (chat, commands, advancements, screenshots...), except where they would fight
  * ULTRAKILL for the same key. With guns out, clicks, number keys, E, Q and the wheel are ULTRAKILL's; with Minecraft
  * hands out (the hands key, V), they work as for Steve: attack and mine, use and place, hotbar, inventory, drop.
- * F is always the punch, so swap-offhand stays off; so does third person, which ULTRAKILL can't draw.
+ * F is always the punch, so swap-offhand stays off; so does third person, which ULTRAKILL can't draw. A key rebound
+ * to one of ULTRAKILL's controls (UcKeybindsScreen) is ULTRAKILL's too while the guns are out.
  */
 @Mixin(Minecraft.class)
 public abstract class MinecraftMixin {
@@ -42,6 +43,13 @@ public abstract class MinecraftMixin {
 			ultracraft$off(options.keyDrop);
 			ultracraft$off(options.keyInventory);
 			for (KeyMapping k : options.keyHotbarSlots) ultracraft$off(k);
+			// whatever Minecraft has on a key rebound to ULTRAKILL (but never Ultracraft's own keys: V1/Steve, hands)
+			java.util.Set<String> taken = dev.ultracraft.UcKeybindsScreen.reboundKeys();
+			if (!taken.isEmpty()) {
+				for (KeyMapping k : options.keyMappings) {
+					if (taken.contains(k.saveString()) && !dev.ultracraft.Ultracraft.isOwnKey(k)) ultracraft$off(k);
+				}
+			}
 		}
 	}
 

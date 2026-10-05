@@ -219,6 +219,11 @@ namespace UltraBridge
             SpawnGore(p.eid, GoreType.Head, at, false, -1);
             SpawnGore(p.eid, GoreType.Body, at + Vector3.up * 0.5f, false, 3);
             SpawnGore(p.eid, GoreType.Body, at - Vector3.up * 0.5f, false, 3);
+            if (p.eid != null)
+            {
+                var b = EnemyBounds(p.eid);
+                BloodBurst(at, Mathf.Max(b.size.x, b.size.y) / K, p.eid);
+            }
             Destroy(p.gameObject);
         }
 

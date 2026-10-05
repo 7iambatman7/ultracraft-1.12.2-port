@@ -49,8 +49,13 @@ public final class UltracraftConfig {
 	public static boolean launchUltrakill = true;
 	/** The OP Shop: Power goes on to 1500% and blast sizes to 1500% (more levels on the Upgrades page). */
 	public static boolean opShop = false;
-	/** ULTRAKILL's frame rate cap (it shares the graphics card with Minecraft). */
-	public static int ukFps = 120;
+	/** Back as Steve, ULTRAKILL's enemies stay (drawn from Steve's camera, still fighting); off: they wait, frozen. */
+	public static boolean steveEnemies = true;
+	/**
+	 * ULTRAKILL's frame rate cap (it shares the graphics card with Minecraft); 0 = match Minecraft: Minecraft draws
+	 * its world from ULTRAKILL's frames, so the view is only as smooth as ULTRAKILL's frame rate.
+	 */
+	public static int ukFps = 0;
 	/**
 	 * ULTRAKILL's own settings as Ultracraft plays it (mouse sensitivity, field of view...): applied while it runs,
 	 * never written into ULTRAKILL's own settings files. Key = ULTRAKILL's pref name.
@@ -60,7 +65,7 @@ public final class UltracraftConfig {
 	public static final Map<String, Integer> ukBinds = new TreeMap<>();
 
 	private static final String[] KEYS = {"v1Height", "autoV1", "ukSpawns", "mcMobs", "sharpShop", "grindBest", "bosses", "bossMinutes", "bossWarnSeconds",
-		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFps"};
+		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFpsCap", "steveEnemies"};
 
 	private static final String COMMENT = "Ultracraft (most of this is on the Ultracraft settings screen): v1Height = ULTRAKILL render height (0 = full window, lower = faster);"
 		+ " autoV1 = become V1 automatically; ukSpawns = ULTRAKILL's enemies spawn in the dark; mcMobs = Minecraft's monsters spawn;"
@@ -119,7 +124,10 @@ public final class UltracraftConfig {
 			impactFrames = Math.max(0.1f, Math.min(3f, Float.parseFloat(p.getProperty("impactFrames", Float.toString(impactFrames)).trim())));
 			launchUltrakill = bool(p, "launchUltrakill", launchUltrakill);
 			opShop = bool(p, "opShop", opShop);
-			ukFps = Math.max(30, Math.min(240, Integer.parseInt(p.getProperty("ukFps", Integer.toString(ukFps)).trim())));
+			steveEnemies = bool(p, "steveEnemies", steveEnemies);
+			// (ukFps was a plain cap, 120 by default: ukFpsCap starts again at "match Minecraft")
+			ukFps = Integer.parseInt(p.getProperty("ukFpsCap", Integer.toString(ukFps)).trim());
+			if (ukFps != 0) ukFps = Math.max(30, Math.min(240, ukFps));
 			ukPrefs.clear();
 			for (String k : p.stringPropertyNames()) {
 				if (k.startsWith("uk.")) ukPrefs.put(k.substring(3), p.getProperty(k).trim());
@@ -153,7 +161,8 @@ public final class UltracraftConfig {
 		p.setProperty("impactFrames", String.format(Locale.ROOT, "%.1f", impactFrames));
 		p.setProperty("launchUltrakill", Boolean.toString(launchUltrakill));
 		p.setProperty("opShop", Boolean.toString(opShop));
-		p.setProperty("ukFps", Integer.toString(ukFps));
+		p.setProperty("steveEnemies", Boolean.toString(steveEnemies));
+		p.setProperty("ukFpsCap", Integer.toString(ukFps));
 		for (var e : ukPrefs.entrySet()) p.setProperty("uk." + e.getKey(), e.getValue());
 		for (var e : ukBinds.entrySet()) p.setProperty("bind." + e.getKey(), Integer.toString(e.getValue()));
 		try {
@@ -167,9 +176,27 @@ public final class UltracraftConfig {
 		}
 	}
 
+	/**
+	 * ULTRAKILL's frame rate cap now: the set one, or Minecraft's own limit (its frame limit, or the monitor's
+	 * refresh rate with VSync).
+	 */
+	public static int ukFpsNow() {
+		if (ukFps > 0) return ukFps;
+		var mc = net.minecraft.client.Minecraft.getInstance();
+		int limit = 240;
+		try {
+			int cap = mc.options.framerateLimit().get();
+			if (cap < 260) limit = cap;
+			if (mc.options.enableVsync().get() && mc.getWindow().getRefreshRate() > 0) limit = Math.min(limit, mc.getWindow().getRefreshRate());
+		} catch (RuntimeException ignored) {
+		}
+		// Minecraft waits for each of ULTRAKILL's frames (UkFrame.waitForNext), so this is the rate both run at
+		return Math.max(30, Math.min(240, limit));
+	}
+
 	/** What ULTRAKILL needs to know of these: OPTS key=value ... (sent on connecting and after every change). */
 	public static void sendOpts() {
-		UkLink.send(String.format(Locale.ROOT, "OPTS impact=%.2f fps=%d playerBlocks=%d enemyBlocks=%d", impactFrames, ukFps, playerBlockDamage ? 1 : 0, enemyBlockDamage ? 1 : 0));
+		UkLink.send(String.format(Locale.ROOT, "OPTS impact=%.2f fps=%d playerBlocks=%d enemyBlocks=%d", impactFrames, ukFpsNow(), playerBlockDamage ? 1 : 0, enemyBlockDamage ? 1 : 0));
 		for (var e : ukPrefs.entrySet()) UkLink.send("UKPREF " + e.getKey() + " " + e.getValue());
 		for (var e : ukBinds.entrySet()) UkLink.send("UKBIND " + e.getKey() + " " + e.getValue());
 	}

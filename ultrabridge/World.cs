@@ -199,6 +199,34 @@ namespace UltraBridge
                 case "TEX":
                     ApplyTexture(rest);
                     break;
+                case "SHOPRQ":
+                {
+                    // debug: how each part of a shop is drawn (queue, shader, depth test and write), to find what
+                    // draws over Minecraft's blocks
+                    var sb = new StringBuilder("SHOPRQ");
+                    var seen = new HashSet<string>();
+                    foreach (var go in shops.Values)
+                    {
+                        if (go == null) continue;
+                        foreach (var r in go.GetComponentsInChildren<Renderer>(false))
+                        {
+                            foreach (var m in r.sharedMaterials)
+                            {
+                                if (m == null) continue;
+                                string zt = m.HasProperty("_ZTest") ? m.GetInt("_ZTest").ToString() : "-";
+                                string zw = m.HasProperty("_ZWrite") ? m.GetInt("_ZWrite").ToString() : "-";
+                                var key = r.GetType().Name + ":" + r.name + " q=" + m.renderQueue + " sh=" + (m.shader != null ? m.shader.name : "?") + " zt=" + zt + " zw=" + zw
+                                    + " layer=" + r.gameObject.layer + " y=" + S(r.bounds.center.y - go.transform.position.y);
+                                if (seen.Add(key)) sb.Append(" | ").Append(key);
+                            }
+                        }
+                        foreach (var cv in go.GetComponentsInChildren<Canvas>(false))
+                            if (seen.Add("canvas" + cv.name)) sb.Append(" | Canvas:").Append(cv.name).Append(" mode=").Append(cv.renderMode).Append(" order=").Append(cv.sortingOrder);
+                        break;
+                    }
+                    Net.Send(sb.ToString());
+                    break;
+                }
                 case "SHOPINFO":
                 {
                     // debug: the shop template and the shops standing in the world

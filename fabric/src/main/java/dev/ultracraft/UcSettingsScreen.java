@@ -80,6 +80,8 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 					CyberGrind.sendState();
 				}),
 			bool("ULTRAKILL Bosses", "ULTRAKILL's bosses come for V1 now and then, with a warning first.", UltracraftConfig.bosses, v -> UltracraftConfig.bosses = v),
+			bool("ULTRAKILL While Steve", "Back as Steve (F8), ULTRAKILL's enemies stay and keep fighting: you see them, and they come for Steve. Off: they wait, frozen, until you're V1 again.",
+				UltracraftConfig.steveEnemies, v -> UltracraftConfig.steveEnemies = v),
 			bool("Become V1 Automatically", "Become V1 as soon as ULTRAKILL is ready (otherwise F8).", UltracraftConfig.autoV1, v -> UltracraftConfig.autoV1 = v),
 			bool("V1 Breaks Blocks", "V1's guns, punches, slams and blasts break blocks.", UltracraftConfig.playerBlockDamage, v -> UltracraftConfig.playerBlockDamage = v),
 			bool("Enemies Break Blocks", "ULTRAKILL's enemies' shots, beams, blasts and fire break blocks.", UltracraftConfig.enemyBlockDamage,
@@ -88,8 +90,9 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 				v -> String.format(Locale.ROOT, "%.1fx", v / 10f), v -> UltracraftConfig.impactFrames = v / 10f),
 			slider("ULTRAKILL Resolution", "How tall ULTRAKILL draws its picture (scaled up to fill the window). Lower = much faster; this is the biggest frame rate setting.",
 				0, 6, resIndex(), v -> RES_NAMES[v], v -> UltracraftConfig.v1Height = RES[v]),
-			slider("ULTRAKILL FPS Cap", "How many frames a second ULTRAKILL draws. It shares the graphics card with Minecraft: a lower cap leaves Minecraft more.",
-				3, 24, UltracraftConfig.ukFps / 10, v -> v * 10 + " FPS", v -> UltracraftConfig.ukFps = v * 10),
+			slider("ULTRAKILL FPS Cap", "How many frames a second ULTRAKILL draws. Match Minecraft (the far left) keeps it in step with Minecraft's own frame limit, the smoothest. It shares the graphics card with Minecraft: a lower cap leaves Minecraft more.",
+				2, 24, UltracraftConfig.ukFps == 0 ? 2 : UltracraftConfig.ukFps / 10, v -> v == 2 ? "Match Minecraft" : v * 10 + " FPS",
+				v -> UltracraftConfig.ukFps = v == 2 ? 0 : v * 10),
 			bool("OP Shop", "The shop's Upgrades page goes much further: every weapon's and arm's Power up to 1500%, and blast sizes (Payload, Shockwave, the mini nuke) up to 1500%.",
 				UltracraftConfig.opShop, v -> {
 					UltracraftConfig.opShop = v;

@@ -118,8 +118,9 @@ public final class ServerOps {
 		MinecraftServer server = level.getServer();
 		switch (cmd) {
 			case "V1" -> {
-				// V1 1|0: this player became V1, or Steve again
+				// V1 1|0 [keep]: this player became V1, or Steve again (keep: ULTRAKILL's enemies stay)
 				boolean on = rest.trim().equals("1");
+				boolean keep = rest.contains("keep");
 				UcNet.setServerV1(server, sp.getUUID(), on);
 				if (on) {
 					var src = server.createCommandSourceStack().withSuppressedOutput();
@@ -134,9 +135,16 @@ public final class ServerOps {
 					CyberGrind.stopIfRunner(sp, "back to Steve");
 					UkBosses.stop(sp, "V1 is gone");
 					State s = state(sp);
-					for (UkEnemyEntity e : s.enemies.values()) e.discard();
-					s.enemies.clear();
+					if (!keep) {
+						for (UkEnemyEntity e : s.enemies.values()) e.discard();
+						s.enemies.clear();
+					}
 				}
+			}
+			case "SHURT" -> {
+				// SHURT damage: as Steve, an ULTRAKILL enemy's hit (ULTRAKILL's 100 HP -> Minecraft's 20)
+				float dmg = Float.parseFloat(rest.trim()) / 5f;
+				if (dmg > 0 && sp.isAlive() && !UcNet.isV1(sp)) sp.hurtServer(sp.level(), sp.damageSources().generic(), dmg);
 			}
 			case "PLAYING" -> state(sp).playing = rest.trim().equals("1");
 			case "SHOP" -> state(sp).shopTouch = rest.trim().equals("1");
@@ -277,6 +285,9 @@ public final class ServerOps {
 				String gear = rest.trim();
 				UkProgress.get(sp).addGear(gear);
 				sp.sendSystemMessage(Component.literal("[Ultracraft] Bought: " + GearNames.of(gear)).withStyle(net.minecraft.ChatFormatting.GOLD));
+			}
+			case "EQUIP" -> {
+				if (a.length >= 3) UkProgress.get(sp).setEquip(a[1], Integer.parseInt(a[2].trim()));
 			}
 			case "UPBUY" -> {
 				String key = rest.trim();

@@ -100,6 +100,14 @@ public final class UkFrame {
 	private static boolean taken;
 
 	/** The camera's call, before the world is drawn: take the newest frame and use the view it was drawn from. */
+	/** When the newest frame arrived. */
+	public static long lastFrameAt;
+
+	/** ULTRAKILL is sending frames (one in the last quarter second). */
+	public static boolean fresh() {
+		return System.currentTimeMillis() - lastFrameAt < 250;
+	}
+
 	public static boolean updateForCamera() {
 		taken = true;
 		return update();
@@ -130,6 +138,7 @@ public final class UkFrame {
 		if (color == null || w != texW || h != texH || maskBpp != texMaskBpp) makeTextures(w, h, maskBpp);
 		if (seq != lastSeq) {
 			lastSeq = seq;
+			lastFrameAt = System.currentTimeMillis();
 			int base = (int) (HEADER + slot * SLOT_BYTES);
 			var enc = RenderSystem.getDevice().createCommandEncoder();
 			// straight from the mapped file to the GPU: no copy on our side
@@ -146,6 +155,55 @@ public final class UkFrame {
 			}
 		}
 		return true;
+	}
+
+	// ------------------------------------------------------------ frame lock
+
+	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("ultracraft");
+	/** This frame waited for ULTRAKILL instead of Minecraft's own frame limit. */
+	public static boolean locked;
+	private static long lockFrames, lockWaitNs, lockTimeouts, lockStatsAt;
+
+	/**
+	 * After Minecraft shows a frame: wait for ULTRAKILL's next one before starting the next, instead of Minecraft's own
+	 * frame limit. Minecraft draws its world from the view of ULTRAKILL's frame, so a Minecraft frame without a new one
+	 * is the same picture again, and one that lands while Minecraft is busy skips one: at two frame rates side by side
+	 * that's a regular hitch. In lock step every ULTRAKILL frame is shown once, as soon as it's there.
+	 */
+	public static void waitForNext() {
+		locked = false;
+		if (color == null || map == null || !fresh() || !(Ultracraft.active || Ultracraft.steveDrawn)) return;
+		locked = true;
+		long start = System.nanoTime();
+		long deadline = start + (long) (1.5e9 / Math.max(30, UltracraftConfig.ukFpsNow()));
+		long nextPoll = start + 1_000_000L;
+		int seen = lastSeq;
+		while (true) {
+			java.lang.invoke.VarHandle.acquireFence();
+			if (map.getInt(0) != seen) break;
+			long now = System.nanoTime();
+			if (now >= deadline) {
+				lockTimeouts++;
+				break;
+			}
+			// keep the window answering while waiting (the wait is a few milliseconds at most)
+			if (now >= nextPoll) {
+				org.lwjgl.glfw.GLFW.glfwPollEvents();
+				nextPoll = now + 1_000_000L;
+			}
+			Thread.onSpinWait();
+		}
+		long end = System.nanoTime();
+		lockFrames++;
+		lockWaitNs += end - start;
+		if (lockStatsAt == 0) lockStatsAt = end;
+		if (end - lockStatsAt > 30_000_000_000L) {
+			double secs = (end - lockStatsAt) / 1e9;
+			LOG.info(String.format(java.util.Locale.ROOT, "[frames] %.0f fps in lock step with ULTRAKILL (cap %d), waited %.1f ms a frame, %d late",
+				lockFrames / secs, UltracraftConfig.ukFpsNow(), lockWaitNs / 1e6 / lockFrames, lockTimeouts));
+			lockFrames = lockWaitNs = lockTimeouts = 0;
+			lockStatsAt = end;
+		}
 	}
 
 	/** Draw the composited V1 layer over the whole GUI area (scaled up from ULTRAKILL's render size). */

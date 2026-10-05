@@ -15,8 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Another player who is V1 isn't drawn as Steve while we are V1 too: our ULTRAKILL draws V1's body where they are
- * (with Steve on top it would show twice). As Steve we see them as Minecraft draws them. Experience orbs right at
- * the camera aren't drawn either.
+ * (with Steve on top it would show twice). As Steve we see them as Minecraft draws them. Experience orbs within five
+ * blocks of the camera (on their way into V1, where Minecraft has the player) aren't drawn either.
  */
 @Mixin(EntityRenderDispatcher.class)
 public abstract class EntityRenderDispatcherMixin {
@@ -25,6 +25,6 @@ public abstract class EntityRenderDispatcherMixin {
 		if (Ultracraft.active && entity instanceof Player p && p != Minecraft.getInstance().player && UcNet.isV1(p)) cir.setReturnValue(false);
 		// experience flying into V1 gathers where Minecraft has the player, right at ULTRAKILL's camera: drawn there it
 		// was a giant lime orb over the whole view
-		if (Ultracraft.active && entity instanceof ExperienceOrb && entity.distanceToSqr(x, y, z) < 4.0) cir.setReturnValue(false);
+		if (Ultracraft.active && entity instanceof ExperienceOrb && entity.distanceToSqr(x, y, z) < 25.0) cir.setReturnValue(false);
 	}
 }

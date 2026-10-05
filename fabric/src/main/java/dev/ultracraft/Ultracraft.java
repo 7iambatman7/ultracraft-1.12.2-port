@@ -99,6 +99,16 @@ public final class Ultracraft implements ClientModInitializer {
 		return k == toggle || k == handsKey;
 	}
 
+	/**
+	 * Steve is playing after having been V1, with ULTRAKILL still running: its enemies stay, drawn from Steve's camera
+	 * (bridge SteveView.cs).
+	 */
+	public static boolean steveView;
+	/** Steve's field of view as Minecraft has it (sent to ULTRAKILL with the camera). */
+	public static float steveFov = 70f;
+	private static boolean everActive;
+	private static int fpsCheck, fpsSent;
+
 	private static KeyMapping toggle;
 	private static KeyMapping handsKey;
 	private static boolean frozen;
@@ -193,6 +203,13 @@ public final class Ultracraft implements ClientModInitializer {
 	private static void renderV1(GuiGraphics ctx) {
 		Minecraft mc = Minecraft.getInstance();
 		if (UkLink.connected) sendInput(mc);
+		if (!active && steveView) {
+			// Steve with ULTRAKILL's enemies about: its layer, drawn from Steve's camera, over Minecraft's world
+			sendMobsDrawn(mc);
+			sendPuppets(mc);
+			if (steveDrawn && UkFrame.updateForOverlay()) UkFrame.draw(ctx);
+			return;
+		}
 		if (!active) {
 			if (UkLink.connected && mc.player != null) {
 				ctx.drawString(mc.font, UkLink.ready ? "ULTRAKILL ready - press F8 to become V1" : "ULTRAKILL connected - loading V1...", 4, 4, 0xFFFFFF00);
@@ -386,12 +403,26 @@ public final class Ultracraft implements ClientModInitializer {
 		// a hitstop never lasts this long: don't leave Minecraft frozen if ULTRAKILL never said it ended
 		if (frozen && (System.currentTimeMillis() - frozenAt > 1500 || !active || !UkLink.connected)) setFrozen(mc, false);
 		// Minecraft's pause menu (Esc, or the window losing focus) stops ULTRAKILL too: V1, enemies, projectiles, sound
-		boolean paused = active && mc.isPaused();
+		// as Steve without ULTRAKILL's enemies about, ULTRAKILL waits (frozen) until V1 is back
+		boolean paused = (active || steveView) ? mc.isPaused() : everActive && mc.level != null;
 		if (paused != pauseSent && UkLink.connected) {
 			pauseSent = paused;
 			UkLink.send("PAUSE " + (paused ? 1 : 0));
 		}
+		// Minecraft's frame limit (or VSync) changed: ULTRAKILL's cap follows it
+		if (UkLink.connected && UltracraftConfig.ukFps == 0 && ++fpsCheck % 40 == 0) {
+			int now = UltracraftConfig.ukFpsNow();
+			if (now != fpsSent) {
+				fpsSent = now;
+				UltracraftConfig.sendOpts();
+			}
+		}
 		LocalPlayer p = mc.player;
+		if (mc.level == null) {
+			// out of the world: Steve's view and V1's history start over
+			steveView = false;
+			everActive = false;
+		}
 		if (p == null || mc.level == null) return;
 		safely("blood", () -> BloodStains.tick(mc.level));
 		if (autoPending && UltracraftConfig.autoV1 && UkLink.ready && !active && mc.screen == null) {
@@ -409,6 +440,10 @@ public final class Ultracraft implements ClientModInitializer {
 				teleportV1(p);
 				lastExport = null;
 			}
+		}
+		if (steveView && !active && UkLink.connected) {
+			steveTick(mc, p);
+			return;
 		}
 		if (!active || !UkLink.connected) return;
 		tick++;
@@ -463,11 +498,38 @@ public final class Ultracraft implements ClientModInitializer {
 		wasDead = UkLink.dead;
 	}
 
+	/** As Steve with ULTRAKILL's enemies about: ULTRAKILL keeps getting the world, and V1's body follows Steve. */
+	private static void steveTick(Minecraft mc, LocalPlayer p) {
+		tick++;
+		if (tick % 40 == 0) UkLink.send("STEVE 1");
+		UkLink.send(String.format(java.util.Locale.ROOT, "STEVEPOS %.3f %.3f %.3f", p.getX(), p.getY(), p.getZ()));
+		BlockPos bp = p.blockPosition();
+		if (lastExport == null || !lastExport.closerThan(bp, 2) || tick % 10 == 0) {
+			exportBlocks(mc.level, bp);
+			safely("fluids", () -> Fluids.export(mc.level, bp));
+			lastExport = bp;
+		}
+		if (tick % 2 == 0) safely("light", () -> Lighting.export(mc, p));
+		if (tick % 10 == 0) safely("weather", () -> Weather.export(mc));
+		if (tick % 20 == 0) safely("shops", () -> ShopExport.export(mc.level, bp));
+		exportEntities(mc, p);
+		exportProjectiles(mc, p);
+		WorldMesh.tick(mc.level, bp);
+	}
+
+	/** Steve's view drawn this frame (the camera took a fresh frame from ULTRAKILL, not a third-person view). */
+	public static boolean steveDrawn;
+
 	private static void begin(Minecraft mc) {
 		LocalPlayer p = mc.player;
 		if (p == null) return;
 		// the server knows us as V1 now: gamerules, flight, our P and gear (ServerOps "V1")
 		UcNet.toServer("V1 1");
+		everActive = true;
+		if (steveView) {
+			steveView = false;
+			UkLink.send("STEVE 0");
+		}
 		lastInputAt = System.currentTimeMillis();
 		originSent = false;
 		lastBlocks = null;
@@ -492,7 +554,14 @@ public final class Ultracraft implements ClientModInitializer {
 		shopTouch = false;
 		shopNear = false;
 		UkLink.send("ZOOM 1");
-		UcNet.toServer("V1 0");
+		if (UltracraftConfig.steveEnemies && UkLink.ready) {
+			// ULTRAKILL's enemies stay: drawn from Steve's camera, still fighting (their stand-ins stay in the world)
+			steveView = true;
+			UkLink.send("STEVE 1");
+			UcNet.toServer("V1 0 keep");
+		} else {
+			UcNet.toServer("V1 0");
+		}
 	}
 
 	/** Become V1 or Steve (F8). */
@@ -574,7 +643,7 @@ public final class Ultracraft implements ClientModInitializer {
 			UcNet.toServer(msg);
 		} else if (msg.startsWith("UI ")) {
 			setUiMode(mc, msg.endsWith("1"));
-		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO) .*")) {
+		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED) .*")) {
 			// debug answers (DebugCommands "uk ...")
 			org.slf4j.LoggerFactory.getLogger("ultracraft").info("[uk] {}", msg);
 		} else if (msg.startsWith("SHOPZONE ")) {
@@ -602,7 +671,7 @@ public final class Ultracraft implements ClientModInitializer {
 
 	/** ULTRAKILL's messages that act on the world, handled by the server (ServerOps). */
 	private static final java.util.regex.Pattern SERVER_OPS = java.util.regex.Pattern.compile(
-		"^(SLAM|RAIL|BOOM|HIT|FIRE|DMG|PIMPACT|PHOLD|PRELEASE|PARRY|PEARN|PADD|GEARADD|UPBUY|BOSSPOS|BOSSDEAD|BOSSGONE|GRIND|SPAWNS|UKDEAD|UKDIE|PHIT) ");
+		"^(SLAM|RAIL|BOOM|HIT|FIRE|DMG|PIMPACT|PHOLD|PRELEASE|PARRY|PEARN|PADD|GEARADD|UPBUY|BOSSPOS|BOSSDEAD|BOSSGONE|GRIND|SPAWNS|UKDEAD|UKDIE|PHIT|SHURT|EQUIP) ");
 
 	/** A line from the server for our Minecraft side ("C:..." in UcNet), on the client thread. */
 	static void fromServer(String msg) {

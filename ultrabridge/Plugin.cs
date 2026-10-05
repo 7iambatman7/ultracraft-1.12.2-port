@@ -416,6 +416,7 @@ namespace UltraBridge
                     UpdateWorldExtras(nm);
                 }
                 KeepHands();
+                KeepGunOut();
                 UpdateFreeze();
                 UpdateDoll();
                 KeepAudio();
@@ -783,6 +784,7 @@ namespace UltraBridge
                 case "GORETEST":
                     StartCoroutine(GoreTest());
                     break;
+
                 case "FRAMESNAP":
                     FrameSnap(rest.Trim());
                     break;
@@ -878,6 +880,10 @@ namespace UltraBridge
             var keep = new HashSet<Transform> { player };
             if (cc != null) keep.Add(cc.transform.root);
             int hidden = 0;
+            // ULTRAKILL's blood and gibs wait in pools under its BloodsplatterManager: they're for the fight, not the
+            // level, and stay drawn (switched off, blood still flew and stained, but was never seen)
+            var bsmMgr = MonoSingleton<BloodsplatterManager>.Instance;
+            var gore = bsmMgr != null ? bsmMgr.transform : null;
             foreach (var root in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
             {
                 if (keep.Contains(root.transform))
@@ -888,8 +894,18 @@ namespace UltraBridge
                     continue;
                 }
                 if (root.GetComponentInChildren<Canvas>(true) != null && root.GetComponentInChildren<Renderer>(true) == null) continue;
-                foreach (var r in root.GetComponentsInChildren<Renderer>(true)) { r.enabled = false; hidden++; }
-                foreach (var c in root.GetComponentsInChildren<Collider>(true)) { c.enabled = false; hidden++; }
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (gore != null && r.transform.IsChildOf(gore)) continue;
+                    r.enabled = false;
+                    hidden++;
+                }
+                foreach (var c in root.GetComponentsInChildren<Collider>(true))
+                {
+                    if (gore != null && c.transform.IsChildOf(gore)) continue;
+                    c.enabled = false;
+                    hidden++;
+                }
                 foreach (var t in root.GetComponentsInChildren<Terrain>(true)) { t.enabled = false; }
             }
             RenderSettings.skybox = null;
@@ -997,6 +1013,13 @@ namespace UltraBridge
         /// d = 0..5 for +x,-x,+y,-y,+z,-z (6..11: the same for see-through blocks like glass and leaves, which collide
         /// but don't hide what's behind them, except through their texture tex's solid pixels when they have one);
         /// (a,b) are the other two axes in x,y,z order.</summary>
+        static bool SameList(List<int> a, List<int> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
         void BuildSection(string rest)
         {
             var parts = rest.Split(new[] { ' ' }, 4);
@@ -1013,6 +1036,21 @@ namespace UltraBridge
                 if (rec.Length == 0) continue;
                 var f = rec.Split(',');
                 int code = int.Parse(f[0]);
+                if (code == 13)
+                {
+                    // a solid model's quad (a fence post, a wall, a stair's step): hides what's behind it, from either
+                    // side; its collision comes as boxes
+                    if (f.Length >= 13)
+                    {
+                        int q = verts.Count;
+                        for (int k = 0; k < 4; k++) verts.Add(McToUk(origin + new Vector3(F(f[1 + k * 3]), F(f[2 + k * 3]), F(f[3 + k * 3]))));
+                        opaqueTris.Add(q); opaqueTris.Add(q + 1); opaqueTris.Add(q + 2);
+                        opaqueTris.Add(q); opaqueTris.Add(q + 2); opaqueTris.Add(q + 3);
+                        opaqueTris.Add(q); opaqueTris.Add(q + 2); opaqueTris.Add(q + 1);
+                        opaqueTris.Add(q); opaqueTris.Add(q + 3); opaqueTris.Add(q + 2);
+                    }
+                    continue;
+                }
                 if (code == 12)
                 {
                     // a plant's (or torch's, door's...) quad: drawn with holes, nothing to collide with
@@ -1050,7 +1088,7 @@ namespace UltraBridge
                     }
                 }
             }
-            if (tris.Count == 0 && (cutout == null || cutout.verts.Count == 0))
+            if (tris.Count == 0 && opaqueTris.Count == 0 && (cutout == null || cutout.verts.Count == 0))
             {
                 RemoveSection(key);
                 return;
@@ -1058,7 +1096,8 @@ namespace UltraBridge
             // only plants (a section of open air above a meadow): nothing to collide with, only what they hide
             var mesh = tris.Count > 0 ? NewMesh(verts, tris) : null;
             // what blocks ULTRAKILL's view: the same faces minus see-through blocks
-            var occluder = mesh == null ? null : opaqueTris.Count == tris.Count ? mesh : opaqueTris.Count > 0 ? NewMesh(verts, opaqueTris) : null;
+            // (the same mesh when every face is solid and there are no model quads)
+            var occluder = opaqueTris.Count == 0 ? null : mesh != null && SameList(opaqueTris, tris) ? mesh : NewMesh(verts, opaqueTris);
             if (!sections.TryGetValue(key, out var go) || go == null)
             {
                 go = new GameObject("sec " + key);
@@ -2307,6 +2346,29 @@ namespace UltraBridge
             if (gc != null && gc.currentWeapon != null && gc.currentWeapon.activeSelf) gc.NoWeapon();
         }
 
+        float nextGunCheck;
+
+        /// <summary>V1's gun is out whenever it should be: rebuilding the loadout (V1's gear arriving at spawn, a
+        /// purchase) left the HUD showing a gun that wasn't drawn until the weapon was swapped.</summary>
+        void KeepGunOut()
+        {
+            if (hands || shopTouch || SteveView || uiMode || mcPaused || !v1Landed || Time.unscaledTime < nextGunCheck) return;
+            nextGunCheck = Time.unscaledTime + 0.5f;
+            var gc = MonoSingleton<GunControl>.Instance;
+            var nm = MonoSingleton<NewMovement>.Instance;
+            if (gc == null || nm == null || nm.dead || gc.slots == null) return;
+            if (gc.currentWeapon != null && gc.currentWeapon.activeInHierarchy) return;
+            bool any = false;
+            foreach (var slot in gc.slots) if (slot != null && slot.Count > 0) any = true;
+            if (!any) return;
+            try
+            {
+                gc.YesWeapon();
+                Plugin.Log.LogInfo("gun brought back out (" + (gc.currentWeapon != null ? gc.currentWeapon.name : "none") + ")");
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("gun out: " + e.Message); }
+        }
+
         static readonly AccessTools.FieldRef<TimeController, float> CurrentStop = AccessTools.FieldRefAccess<TimeController, float>("currentStop");
         bool frozenSent;
 
@@ -2992,6 +3054,7 @@ namespace UltraBridge
         {
             HoldPause();
             if (!levelPrepared) return;
+            UpdateSteveCamera();
             PoseDollHead();
             var pp = MonoSingleton<PostProcessV2_Handler>.Instance;
             var vc = pp != null ? pp.virtualCam : null;
@@ -3268,15 +3331,15 @@ namespace UltraBridge
 
         /// <summary>A splatter of ULTRAKILL blood (sound, stains, and V1's blood healing when close, as for its own
         /// enemies). hp &lt; 0 keeps the splatter's own amount.</summary>
-        public static void SpawnGore(EnemyIdentifier eid, GoreType type, Vector3 at, bool fromExplosion, int hp)
+        public static GameObject SpawnGore(EnemyIdentifier eid, GoreType type, Vector3 at, bool fromExplosion, int hp)
         {
             try
             {
                 var bsm = MonoSingleton<BloodsplatterManager>.Instance;
                 var gz = I != null ? I.McGoreZone() : null;
-                if (bsm == null || gz == null) return;
+                if (bsm == null || gz == null) return null;
                 var gore = eid != null ? bsm.GetGore(type, eid, fromExplosion) : bsm.GetGore(type, false, false, false, null, fromExplosion);
-                if (gore == null) return;
+                if (gore == null) return null;
                 // the pool keeps splatters under an inactive store; like an enemy's own, it only comes alive (spray,
                 // sound, stains, the healing trigger) once it's in a gore zone
                 gore.transform.position = at;
@@ -3287,8 +3350,10 @@ namespace UltraBridge
                     if (hp >= 0) bs.hpAmount = hp;
                     bs.GetReady();
                 }
+                return gore;
             }
             catch (Exception e) { Plugin.Log.LogDebug("gore: " + e.Message); }
+            return null;
         }
 
         GoreZone mcGore;
@@ -3334,6 +3399,7 @@ namespace UltraBridge
             SpawnGore(eid, GoreType.Head, at + Vector3.up * h * 0.3f, false, 10);
             SpawnGore(eid, GoreType.Body, at, false, 10);
             SpawnGore(eid, GoreType.Limb, at - Vector3.up * h * 0.25f, false, 10);
+            BloodBurst(at, Mathf.Max(w, h) / K, eid);
         }
 
         /// <summary>Everything unlocked (all weapons, variants and arms) while ULTRAKILL runs for Minecraft; the save

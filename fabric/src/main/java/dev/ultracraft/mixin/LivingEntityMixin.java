@@ -26,6 +26,13 @@ public abstract class LivingEntityMixin {
 		if ((Object) this instanceof ServerPlayer sp && UcNet.isV1(sp) && amount > 0f) UcNet.send(sp, "HEAL " + amount);
 	}
 
+	/** As V1 a dead mob goes without Minecraft's white puff of smoke: ULTRAKILL's blood has burst out of it instead. */
+	@Inject(method = "makePoofParticles", at = @At("HEAD"), cancellable = true)
+	private void ultracraft$bloodNotSmoke(CallbackInfo ci) {
+		LivingEntity self = (LivingEntity) (Object) this;
+		if (self.level().isClientSide() && self.isDeadOrDying() && (Ultracraft.active || Ultracraft.steveDrawn)) ci.cancel();
+	}
+
 	@Inject(method = "playHurtSound", at = @At("HEAD"), cancellable = true)
 	private void ultracraft$quietV1(DamageSource source, CallbackInfo ci) {
 		if ((Object) this instanceof ServerPlayer sp && UcNet.isV1(sp)) ci.cancel();

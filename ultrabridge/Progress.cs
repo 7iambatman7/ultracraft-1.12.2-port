@@ -68,6 +68,20 @@ namespace UltraBridge
             return k;
         }
 
+        /// <summary>Which of V1's weapons this world has equipped: weapon.rev0 = 0 (off), 1 (on), 2 (the alternate);
+        /// a missing one is on.</summary>
+        public static readonly Dictionary<string, int> Equips = new Dictionary<string, int>();
+
+        public static bool IsEquipKey(string key) => key != null && key.StartsWith("weapon.") && (key == "weapon.arm0" || Shipped.Contains(key.Substring(7)));
+
+        public static int EquipOf(string key) => Equips.TryGetValue(key, out var v) ? v : 1;
+
+        public void SetEquip(string key, int value)
+        {
+            Equips[key] = value;
+            if (Net.Connected) Net.Send("EQUIP " + key + " " + value);
+        }
+
         public static bool Owns(string gear)
         {
             if (string.IsNullOrEmpty(gear)) return false;
@@ -121,6 +135,24 @@ namespace UltraBridge
                     bool changed = !gearKnown || hadAll != all || !had.SetEquals(UcGear);
                     gearKnown = true;
                     if (changed) RefreshLoadout();
+                    RefreshShopGear();
+                    break;
+                }
+                case "EQUIPS":
+                {
+                    // EQUIPS weapon.rev0=2,...: what this world has equipped (sent before GEAR)
+                    var now = new Dictionary<string, int>();
+                    foreach (var kv in rest.Trim().Split(','))
+                    {
+                        var e = kv.Split('=');
+                        if (e.Length == 2 && IsEquipKey(e[0]) && int.TryParse(e[1], out var v)) now[e[0]] = v;
+                    }
+                    bool changed = now.Count != Equips.Count;
+                    foreach (var kv in now) if (!Equips.TryGetValue(kv.Key, out var old) || old != kv.Value) changed = true;
+                    if (!changed) break;
+                    Equips.Clear();
+                    foreach (var kv in now) Equips[kv.Key] = kv.Value;
+                    RefreshLoadout();
                     RefreshShopGear();
                     break;
                 }
@@ -310,7 +342,11 @@ namespace UltraBridge
                 alt.name = "AltButton";
                 string gear = kind + "alt", needs = kind + "0";
                 var sound = vi.buySound;
-                Rewire(alt.transform, () => BuyAlternate(gear, needs, sound));
+                Rewire(alt.transform, () =>
+                {
+                    if (Owns(gear)) ToggleAlternate(kind, false);
+                    else BuyAlternate(gear, needs, sound);
+                });
                 var text = alt.GetComponentInChildren<TMP_Text>(true);
                 if (text != null)
                 {
@@ -689,9 +725,45 @@ namespace UltraBridge
             GameProgressSaver.AddMoney(-price);
             GameProgressSaver.AddGear(gear);
             if (sound != null) Instantiate(sound);
+            // straight into V1's hands
+            ToggleAlternate(gear.Substring(0, gear.Length - 3), true);
+        }
+
+        static readonly Dictionary<string, string> WeaponTitles = new Dictionary<string, string> { { "rev", "Revolver" }, { "sho", "Shotgun" }, { "nai", "Nailgun" } };
+
+        /// <summary>The weapon's variants are the alternate version (any of them).</summary>
+        static bool AlternateOn(string kind)
+        {
+            for (int v = 0; v < 3; v++) if (Owns(kind + v) && EquipOf("weapon." + kind + v) == 2) return true;
+            return false;
+        }
+
+        /// <summary>The Alternate button, once bought: the weapon's equipped variants switch between the standard and
+        /// the alternate version (unequipped ones stay off).</summary>
+        void ToggleAlternate(string kind, bool justBought)
+        {
+            int to = AlternateOn(kind) ? 1 : 2;
+            bool any = false;
+            for (int v = 0; v < 3; v++)
+            {
+                string key = "weapon." + kind + v;
+                if (!Owns(kind + v) || EquipOf(key) == 0) continue;
+                SetEquip(key, to);
+                any = true;
+            }
+            var hud = MonoSingleton<HudMessageReceiver>.Instance;
+            if (!any)
+            {
+                if (hud != null) hud.SendHudMessage("Equip one of its variants first (its arrows).", "", "", 0, false);
+                ShopGearTexts();
+                return;
+            }
             RefreshLoadout();
             RefreshShopGear();
-            if (hud != null) hud.SendHudMessage("Alternate bought: set a variant to <color=#FF4343>Alternate</color> with its arrows.", "", "", 0, false);
+            WeaponTitles.TryGetValue(kind, out var title);
+            if (hud != null)
+                hud.SendHudMessage(justBought ? "Alternate " + title + " bought and equipped: <color=#FF4343>ALTERNATE</color> switches back and forth."
+                    : title + ": " + (to == 2 ? "<color=#FF4343>alternate</color>" : "standard"), "", "", 0, false);
         }
 
         /// <summary>Every shop's prices, ownership and P after the money or the gear changed.</summary>
@@ -736,12 +808,13 @@ namespace UltraBridge
                 var sb = button.GetComponent<ShopButton>();
                 int price = PriceOf(gear, 0);
                 bool owned = Owns(gear), can = Owns(needs) && UcMoney >= price;
+                // once bought it's a switch: standard or alternate
                 if (text != null)
-                    text.text = owned ? "ALTERNATE\nOWNED"
+                    text.text = owned ? (AlternateOn(gear.Substring(0, gear.Length - 3)) ? "ALTERNATE\n<color=#FF4343>ON</color>" : "ALTERNATE\nOFF")
                         : can ? "ALTERNATE\n" + MoneyText.DivideMoney(price) + " <color=#FF4343>P</color>"
                         : "<color=red>ALTERNATE\n" + MoneyText.DivideMoney(price) + " P</color>";
                 if (image != null) image.color = owned || can ? Color.white : Color.red;
-                if (sb != null) sb.failure = !can || owned;
+                if (sb != null) sb.failure = !can && !owned;
             }
         }
 

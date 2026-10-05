@@ -48,6 +48,11 @@ namespace UltraBridge
                         if (p[0] == "fps" && int.TryParse(p[1], out var fps)) FpsCap = Mathf.Clamp(fps, 30, 240);
                     }
                     break;
+                case "STEVE":
+                case "STEVECAM":
+                case "STEVEPOS":
+                    HandleSteve(cmd, rest);
+                    break;
                 case "UKBIND":
                 {
                     // UKBIND Map/Action[/part] <glfw key | -1-mouse button | ->: rebind one of ULTRAKILL's controls (runtime only)
@@ -215,7 +220,23 @@ namespace UltraBridge
     {
         static void Postfix(string key, ref int __result)
         {
-            if (!Bridge.ReadingStoredPrefs && Bridge.PrefOverrides.TryGetValue(key, out var v) && v is int i) __result = i;
+            if (Bridge.ReadingStoredPrefs) return;
+            if (Bridge.PrefOverrides.TryGetValue(key, out var v) && v is int i) __result = i;
+            // which weapons are equipped (and as the alternate) is this world's
+            else if (Bridge.AllWeapons && Bridge.IsEquipKey(key)) __result = Bridge.EquipOf(key);
+        }
+    }
+
+    /// <summary>The shop's equip arrows, its purchases and the Alternate button set what's equipped in this world (EQUIP):
+    /// never in ULTRAKILL's own settings.</summary>
+    [HarmonyPatch(typeof(PrefsManager), nameof(PrefsManager.SetInt))]
+    static class WorldEquip
+    {
+        static bool Prefix(string key, int content)
+        {
+            if (!Bridge.AllWeapons || !Bridge.IsEquipKey(key)) return true;
+            Bridge.I?.SetEquip(key, content);
+            return false;
         }
     }
 

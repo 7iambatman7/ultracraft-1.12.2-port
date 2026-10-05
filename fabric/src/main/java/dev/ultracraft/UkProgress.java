@@ -28,7 +28,8 @@ final class UkProgress extends SavedData {
 		Codec.LONG.optionalFieldOf("bossClock", 0L).forGetter(p -> p.bossClock),
 		Codec.LONG.optionalFieldOf("nextBoss", 0L).forGetter(p -> p.nextBoss),
 		Codec.LONG.optionalFieldOf("earned", 0L).forGetter(p -> p.earned),
-		Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("upgrades", Map.of()).forGetter(p -> p.upgrades)
+		Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("upgrades", Map.of()).forGetter(p -> p.upgrades),
+		Codec.unboundedMap(Codec.STRING, Codec.INT).optionalFieldOf("equips", Map.of()).forGetter(p -> p.equips)
 	).apply(i, UkProgress::new));
 	static final SavedDataType<UkProgress> TYPE = type("ultracraft_progress");
 
@@ -55,11 +56,15 @@ final class UkProgress extends SavedData {
 	long earned;
 	/** Each upgrade's level (UkUpgrades' keys, "rev.power"...; missing is 1). */
 	final Map<String, Integer> upgrades = new HashMap<>();
+	/** Which weapons are equipped: weapon.rev0 = 0 off, 1 on, 2 the alternate (missing is on). */
+	final Map<String, Integer> equips = new HashMap<>();
 
 	UkProgress() {}
 
-	private UkProgress(int money, List<String> gear, Map<String, Integer> beaten, long bossClock, long nextBoss, long earned, Map<String, Integer> upgrades) {
+	private UkProgress(int money, List<String> gear, Map<String, Integer> beaten, long bossClock, long nextBoss, long earned, Map<String, Integer> upgrades,
+		Map<String, Integer> equips) {
 		this.upgrades.putAll(upgrades);
+		this.equips.putAll(equips);
 		UkUpgrades.migrate(this.upgrades);
 		this.money = money;
 		this.gear.addAll(gear);
@@ -125,6 +130,13 @@ final class UkProgress extends SavedData {
 		changed();
 	}
 
+	/** EQUIP key value: the shop equipped, unequipped or switched a weapon to its alternate. */
+	void setEquip(String key, int value) {
+		if (key == null || !key.startsWith("weapon.") || key.length() > 32 || value < 0 || value > 2) return;
+		equips.put(key, value);
+		changed();
+	}
+
 	int level(String key) {
 		UkUpgrades.Track t = UkUpgrades.TRACKS.get(key);
 		int max = t != null ? t.max() : 1;
@@ -171,8 +183,11 @@ final class UkProgress extends SavedData {
 		recentAt = now;
 	}
 
-	/** GEAR money all|gear,...: what V1 owns here (all of it with the allGear setting). */
+	/** EQUIPS key=value,... then GEAR money all|gear,...: what V1 has equipped and owns here (all of it with allGear). */
 	void send() {
+		StringBuilder eq = new StringBuilder("EQUIPS ");
+		for (Map.Entry<String, Integer> e : equips.entrySet()) eq.append(e.getKey()).append('=').append(e.getValue()).append(',');
+		sendOwner(equips.isEmpty() ? "EQUIPS -" : eq.substring(0, eq.length() - 1));
 		sendOwner("GEAR " + money + " " + (UltracraftConfig.allGear ? "all" : gear.isEmpty() ? "-" : String.join(",", gear)));
 		sendUpgrades();
 	}

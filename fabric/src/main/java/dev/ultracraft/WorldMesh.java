@@ -161,6 +161,8 @@ public final class WorldMesh {
 						} else if (inside) {
 							// grass, flowers, crops, vines, torches, doors...: their model's own quads, drawn with holes
 							faces += plant(sb, level, s, m, bx, by, bz);
+							// fences, walls, stairs, panes, lanterns...: their model hides what's behind it
+							faces += solid(sb, s, m, bx, by, bz);
 							VoxelShape shape = s.getCollisionShape(level, m);
 							if (!shape.isEmpty()) {
 								int off = s.canOcclude() ? 0 : 6;
@@ -297,6 +299,42 @@ public final class WorldMesh {
 					sb.append(';');
 					n++;
 					plantQuads++;
+				}
+			}
+		}
+		return n;
+	}
+
+	/**
+	 * Solid blocks that aren't full cubes (fences, walls, stairs, slabs, anvils, lanterns...): every quad of their
+	 * model, so ULTRAKILL's enemies, the shop and effects hide behind a fence post or a wall's top exactly where
+	 * Minecraft draws one (their collision boxes alone are often thinner, or don't hide anything at all).
+	 * Record: 13,x,y,z (four corners, from the section's corner); depth only, drawn double-sided.
+	 */
+	private static int solid(StringBuilder sb, BlockState s, BlockPos pos, int bx, int by, int bz) {
+		if (s.getRenderShape() != RenderShape.MODEL || ItemBlockRenderTypes.getChunkRenderType(s) != ChunkSectionLayer.SOLID) return 0;
+		var model = Minecraft.getInstance().getBlockRenderer().getBlockModel(s);
+		RANDOM.setSeed(s.getSeed(pos));
+		PARTS.clear();
+		model.collectParts(RANDOM, PARTS);
+		Vec3 off = s.getOffset(pos);
+		double ox = pos.getX() - bx + off.x, oy = pos.getY() - by + off.y, oz = pos.getZ() - bz + off.z;
+		Set<String> seen = new HashSet<>();
+		int n = 0;
+		for (BlockModelPart part : PARTS) {
+			for (Direction d : SIDES) {
+				for (BakedQuad q : part.getQuads(d)) {
+					if (!seen.add(corners(q))) continue;
+					sb.append("13");
+					for (int i = 0; i < 4; i++) {
+						Vector3fc v = q.position(i);
+						sb.append(',');
+						num(sb, ox + v.x()).append(',');
+						num(sb, oy + v.y()).append(',');
+						num(sb, oz + v.z());
+					}
+					sb.append(';');
+					n++;
 				}
 			}
 		}

@@ -109,7 +109,8 @@ final class BloodStains {
 		Vector3f t = Math.abs(ny) < 0.9f ? new Vector3f(0, 1, 0).cross(n) : new Vector3f(1, 0, 0).cross(n);
 		t.normalize();
 		Vector3f b = new Vector3f(n).cross(t);
-		float turn = RANDOM.nextFloat() * Mth.TWO_PI, half = size * 0.5f * (0.7f + RANDOM.nextFloat() * 0.6f);
+		// a bit bigger than ULTRAKILL's own: fewer, fuller splats read better on Minecraft's blocks
+		float turn = RANDOM.nextFloat() * Mth.TWO_PI, half = size * 1.0f * (0.85f + RANDOM.nextFloat() * 0.45f);
 		float c = Mth.cos(turn) * half, s = Mth.sin(turn) * half;
 		ax[i] = t.x * c + b.x * s;
 		ay[i] = t.y * c + b.y * s;

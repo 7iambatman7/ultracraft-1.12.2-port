@@ -31,6 +31,8 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 	record UkPref(String key, char type, String caption, String def, int min, int max, String tooltip) {}
 
 	static final List<UkPref> UK_PREFS = List.of(
+		new UkPref("difficulty", 'i', "ULTRAKILL Difficulty", "2", 0, 4,
+			"ULTRAKILL's difficulty for V1 and its enemies while playing Ultracraft: Harmless gives V1 200 health; harder ones make enemies faster and deadlier. Enemies already out keep theirs."),
 		new UkPref("mouseSensitivity", 'f', "Mouse Sensitivity", "50", 1, 100, "ULTRAKILL's mouse sensitivity (its default is 50)."),
 		new UkPref("fieldOfView", 'f', "Field of View", "105", 60, 160, "ULTRAKILL's field of view; Minecraft's world is drawn to match."),
 		new UkPref("screenShake", 'f', "Screen Shake", "1", 0, 100, "How hard explosions and hits shake the camera."),
@@ -41,6 +43,8 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 		new UkPref("bloodEnabled", 'b', "Blood", "true", 0, 1, "ULTRAKILL's blood (it still heals V1 with this off)."),
 		new UkPref("allVolume", 'f', "ULTRAKILL Volume", "1", 0, 100, "The volume of everything ULTRAKILL plays."),
 		new UkPref("musicVolume", 'f', "ULTRAKILL Music", "0.6", 0, 100, "ULTRAKILL's music (fights, bosses, the Cyber Grind)."));
+
+	private static final String[] UK_DIFFICULTY = {"Harmless", "Lenient", "Standard", "Violent", "Brutal"};
 
 	/** The ones on the Music page rather than ULTRAKILL Settings. */
 	private static final List<String> VOLUMES = List.of("allVolume", "musicVolume");
@@ -163,6 +167,10 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 			bool("ULTRAKILL Bosses", "ULTRAKILL's bosses come for V1 now and then, with a warning first.", UltracraftConfig.bosses, v -> UltracraftConfig.bosses = v),
 			slider("Time Between Bosses", "About how many minutes of play pass between bosses.", 5, 60, UltracraftConfig.bossMinutes, v -> v + " min",
 				v -> UltracraftConfig.bossMinutes = v),
+			slider("Boss Difficulty", "How hard bosses are. Auto: they get harder the more of them V1 has beaten.", 0, 5, UltracraftConfig.bossDifficulty,
+				v -> v == 0 ? "Auto" : UkBosses.DIFFICULTY[v - 1], v -> UltracraftConfig.bossDifficulty = v),
+			slider("Trait Chance", "How often a boss comes with traits (modifiers such as Radiant or Volatile); about a quarter of those bring two.", 0, 100,
+				UltracraftConfig.traitChance, v -> v + "%", v -> UltracraftConfig.traitChance = v),
 			bool("ULTRAKILL Arenas", "Arenas themed after ULTRAKILL's layers of Hell generate in new parts of the world, each with a boss waiting inside.",
 				UltracraftConfig.arenas, v -> UltracraftConfig.arenas = v),
 			bool("ULTRAKILL While Steve", "Back as Steve (F8), ULTRAKILL's enemies stay and keep fighting: you see them, and they come for Steve. Off: they wait, frozen, until you're V1 again.",
@@ -292,6 +300,7 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 		}
 		int value = Math.round(percent ? f * 100f : f);
 		java.util.function.IntFunction<String> label = p.key.equals("weaponHoldPosition") ? v -> v == 0 ? "Right" : v == 1 ? "Middle" : "Left"
+			: p.key.equals("difficulty") ? v -> UK_DIFFICULTY[Math.max(0, Math.min(4, v))]
 			: percent ? v -> v + "%" : Integer::toString;
 		return slider(p.caption, p.tooltip + " (ULTRAKILL's own settings stay as they are.)", p.min, p.max, value, label,
 			v -> setUk(p, p.type == 'i' ? Integer.toString(v) : percent ? String.format(Locale.ROOT, "%.2f", v / 100f) : String.format(Locale.ROOT, "%.1f", (float) v)));

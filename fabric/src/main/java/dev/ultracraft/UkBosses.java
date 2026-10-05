@@ -259,17 +259,22 @@ final class UkBosses {
 
 	/** Its difficulty by how many bosses this player has beaten. */
 	private static int difficultyFor(UkProgress p) {
+		// chosen in the settings
+		if (UltracraftConfig.bossDifficulty > 0) return Math.min(DIFFICULTY.length, UltracraftConfig.bossDifficulty) - 1;
 		int beaten = p.bossesBeaten(), d = 0;
 		for (int i = 0; i < DIFFICULTY_AT.length; i++) if (beaten >= DIFFICULTY_AT[i]) d = i;
 		return d;
 	}
 
-	/** 45% none, 40% one, 15% two (never Giant and Tiny together; Eclipse only under a sky). */
+	/**
+	 * Traits at the settings' chance (55% by default: 40% one, 15% two); never Giant and Tiny together, Eclipse only
+	 * under a sky.
+	 */
 	private static void rollMods(ServerPlayer sp) {
 		mods.clear();
 		RandomSource r = sp.getRandom();
-		double roll = r.nextDouble();
-		int n = roll < 0.15 ? 2 : roll < 0.55 ? 1 : 0;
+		double roll = r.nextDouble(), chance = UltracraftConfig.traitChance / 100.0;
+		int n = roll < chance * 15 / 55 ? 2 : roll < chance ? 1 : 0;
 		List<Mod> can = new ArrayList<>();
 		for (Mod m : MODS) {
 			if (m.key.equals("eclipse") && !sp.level().dimensionType().hasSkyLight()) continue;

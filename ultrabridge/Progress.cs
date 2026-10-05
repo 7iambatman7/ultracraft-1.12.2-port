@@ -255,6 +255,7 @@ namespace UltraBridge
                             if (slot != null) foreach (var gun in slot) if (gun != null) sb.Append(gun.name.Replace("(Clone)", "").Replace(' ', '_')).Append(' ');
                             sb.Append(']');
                         }
+                        if (gc.currentWeapon != null) sb.Append(" current=").Append(gc.currentSlotIndex).Append('/').Append(gc.currentVariationIndex).Append(':').Append(gc.currentWeapon.name.Replace("(Clone)", "").Replace(' ', '_'));
                     }
                     var fc = levelPrepared ? MonoSingleton<FistControl>.Instance : null;
                     if (fc != null) sb.Append(" arms=").Append(string.Join(",", Traverse.Create(fc).Field("spawnedArmNums").GetValue<List<int>>() ?? new List<int>()));
@@ -1135,6 +1136,31 @@ namespace UltraBridge
     }
 
     // ---------------------------------------------------------------- Harmony: this world's P and gear, not the save's
+
+    /// <summary>For Minecraft, the intro goes to the main menu (and on to the Sandbox) even on a save that hasn't
+    /// seen the intro or beaten the tutorial; otherwise it loads the Tutorial and V1 never gets to Minecraft. Only
+    /// what's read changes: nothing is written to the save.</summary>
+    [HarmonyPatch(typeof(GameProgressSaver))]
+    static class ForMinecraftSkipTutorial
+    {
+        static bool ForMinecraft => Net.Connected || Bridge.LaunchedForMinecraft;
+
+        [HarmonyPrefix, HarmonyPatch(nameof(GameProgressSaver.GetTutorial))]
+        static bool Tutorial(ref bool __result)
+        {
+            if (!ForMinecraft) return true;
+            __result = true;
+            return false;
+        }
+
+        [HarmonyPrefix, HarmonyPatch(nameof(GameProgressSaver.GetIntro))]
+        static bool Intro(ref bool __result)
+        {
+            if (!ForMinecraft) return true;
+            __result = true;
+            return false;
+        }
+    }
 
     [HarmonyPatch(typeof(GameProgressSaver), nameof(GameProgressSaver.CheckGear))]
     static class WorldGear

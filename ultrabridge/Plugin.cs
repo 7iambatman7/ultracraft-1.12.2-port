@@ -285,7 +285,8 @@ namespace UltraBridge
         // glows) that never writes alpha; 1 would be alpha only
         int maskBpp = 4;
         int lastHp = -1;
-        static readonly bool LaunchedForMinecraft = Array.IndexOf(Environment.GetCommandLineArgs(), "-ultracraft") >= 0;
+        float nextLoadingNote;
+        internal static readonly bool LaunchedForMinecraft = Array.IndexOf(Environment.GetCommandLineArgs(), "-ultracraft") >= 0;
 
         /// <summary>-ucinstance N: a second (third...) Ultracraft on the same computer (testing multiplayer alone) uses
         /// its own port (27110 + N - 1) and its own shared files, so the two pairs of games don't cross.</summary>
@@ -401,13 +402,21 @@ namespace UltraBridge
                 dollFailed = false;
                 Plugin.Log.LogInfo("scene: " + scene);
             }
-            if ((Net.Connected || LaunchedForMinecraft) && (scene == "Main Menu" || scene == "Intro") && Time.unscaledTime > 3f)
+            // a save that hasn't been through the tutorial gets sent there by the intro (IntroViolenceScreen); V1 is
+            // needed in the Sandbox all the same (ForMinecraftSkipTutorial keeps the intro from going there at all)
+            if ((Net.Connected || LaunchedForMinecraft) && (scene == "Main Menu" || scene == "Intro" || scene == "Tutorial") && Time.unscaledTime > 3f)
             {
                 SceneHelper.LoadScene("uk_construct");
             }
             // Never touch MonoSingleton<T>.Instance before the level is ready: a lookup that finds nothing uses up
             // the singleton's one search, and objects whose Awake asks for it later get null forever. That is what
             // left CameraController without V1 (its LateUpdate then bails out, so the view never turns).
+            // not ready yet: tell Minecraft where ULTRAKILL is, so a hang says where it is
+            if (!levelPrepared && Net.Connected && Time.unscaledTime > nextLoadingNote)
+            {
+                nextLoadingNote = Time.unscaledTime + 2f;
+                Net.Send("LOADING " + scene);
+            }
             if (scene == "uk_construct" && !levelPrepared && Time.timeSinceLevelLoad > 1f && LevelStarted())
             {
                 PrepareLevel();

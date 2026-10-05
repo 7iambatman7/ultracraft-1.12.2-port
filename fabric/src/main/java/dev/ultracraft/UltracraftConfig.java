@@ -35,6 +35,10 @@ public final class UltracraftConfig {
 	public static boolean bosses = true;
 	/** About how many minutes of play between bosses. */
 	public static int bossMinutes = 20;
+	/** Bosses' difficulty: 0 = by how many bosses V1 has beaten, 1-5 = always EASY ... V1 MUST DIE. */
+	public static int bossDifficulty = 0;
+	/** The chance (percent) a boss brings traits (modifiers); about a quarter of those bring two. */
+	public static int traitChance = 55;
 	/** How long the warning gives V1 to get ready. */
 	public static int bossWarnSeconds = 30;
 	/** Every weapon, variant and arm without buying them (the shop still takes P for custom colours). */
@@ -80,14 +84,14 @@ public final class UltracraftConfig {
 	/** Cheats (UcCheats) switched on: id -> on. */
 	public static final Map<String, Boolean> cheats = new TreeMap<>();
 
-	private static final String[] KEYS = {"v1Height", "autoV1", "ukSpawns", "mcMobs", "sharpShop", "grindBest", "bosses", "bossMinutes", "bossWarnSeconds",
+	private static final String[] KEYS = {"v1Height", "autoV1", "ukSpawns", "mcMobs", "sharpShop", "grindBest", "bosses", "bossMinutes", "bossDifficulty", "traitChance", "bossWarnSeconds",
 		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFpsCap", "steveEnemies", "fightMusic", "bossThemes",
 		"calmMusic", "hushMcMusic", "styleRewards", "arenas", "lowLatency"};
 
 	private static final String COMMENT = "Ultracraft (most of this is on the Ultracraft settings screen): v1Height = ULTRAKILL render height (0 = full window, lower = faster);"
 		+ " autoV1 = become V1 automatically; ukSpawns = ULTRAKILL's enemies spawn in the dark; mcMobs = Minecraft's monsters spawn;"
 		+ " sharpShop = full resolution at a shop's screen; grindBest = best Cyber Grind wave; bosses = ULTRAKILL's bosses come now and then;"
-		+ " bossMinutes = minutes of play between them; bossWarnSeconds = warning before one arrives; allGear = every weapon without buying it;"
+		+ " bossMinutes = minutes of play between them; bossDifficulty = 0 by bosses beaten, 1-5 EASY to V1 MUST DIE; traitChance = percent of bosses with traits; bossWarnSeconds = warning before one arrives; allGear = every weapon without buying it;"
 		+ " playerBlockDamage / enemyBlockDamage = V1's / enemies' attacks break blocks; impactFrames = hitstop length (0.1 to 3);"
 		+ " launchUltrakill = start ULTRAKILL with Minecraft; opShop = upgrades go to 1500%; uk.* = ULTRAKILL settings used while playing Ultracraft;"
 		+ " fightMusic = off, random or a song of ULTRAKILL's soundtrack; cheat.* = cheats on; arenas = ULTRAKILL arenas generate in new chunks";
@@ -135,6 +139,8 @@ public final class UltracraftConfig {
 			grindBest = Integer.parseInt(p.getProperty("grindBest", Integer.toString(grindBest)).trim());
 			bosses = bool(p, "bosses", bosses);
 			bossMinutes = Integer.parseInt(p.getProperty("bossMinutes", Integer.toString(bossMinutes)).trim());
+			bossDifficulty = Math.max(0, Math.min(5, Integer.parseInt(p.getProperty("bossDifficulty", Integer.toString(bossDifficulty)).trim())));
+			traitChance = Math.max(0, Math.min(100, Integer.parseInt(p.getProperty("traitChance", Integer.toString(traitChance)).trim())));
 			bossWarnSeconds = Integer.parseInt(p.getProperty("bossWarnSeconds", Integer.toString(bossWarnSeconds)).trim());
 			allGear = bool(p, "allGear", allGear);
 			playerBlockDamage = bool(p, "playerBlockDamage", playerBlockDamage);
@@ -180,6 +186,8 @@ public final class UltracraftConfig {
 		p.setProperty("grindBest", Integer.toString(grindBest));
 		p.setProperty("bosses", Boolean.toString(bosses));
 		p.setProperty("bossMinutes", Integer.toString(bossMinutes));
+		p.setProperty("bossDifficulty", Integer.toString(bossDifficulty));
+		p.setProperty("traitChance", Integer.toString(traitChance));
 		p.setProperty("bossWarnSeconds", Integer.toString(bossWarnSeconds));
 		p.setProperty("allGear", Boolean.toString(allGear));
 		p.setProperty("playerBlockDamage", Boolean.toString(playerBlockDamage));
@@ -233,7 +241,7 @@ public final class UltracraftConfig {
 		UkLink.send(String.format(Locale.ROOT, "OPTS impact=%.2f fps=%d playerBlocks=%d enemyBlocks=%d lowlat=%d", impactFrames, ukFpsNow(), playerBlockDamage ? 1 : 0,
 			enemyBlockDamage ? 1 : 0, lowLatency ? 1 : 0));
 		for (var e : ukPrefs.entrySet()) UkLink.send("UKPREF " + e.getKey() + " " + e.getValue());
-		for (var e : ukBinds.entrySet()) UkLink.send("UKBIND " + e.getKey() + " " + e.getValue());
+		for (var e : ukBinds.entrySet()) if (!UcKeybindsScreen.isGun(e.getKey())) UkLink.send("UKBIND " + e.getKey() + " " + e.getValue());
 		sendMusic();
 		UcCheats.sendAll();
 	}

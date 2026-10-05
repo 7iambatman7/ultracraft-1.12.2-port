@@ -127,13 +127,15 @@ namespace UltraBridge
 
         // ------------------------------------------------------------ the Whiplash
 
-        /// <summary>A mob too big to reel in (an iron golem, a ravager...): like ULTRAKILL's heavy enemies, V1 goes to it.</summary>
+        /// <summary>A mob the Whiplash drags V1 to, as ULTRAKILL's heavy enemies do: anything about V1's size or
+        /// bigger (a zombie, a cow, an iron golem...). Only smaller ones (chickens, wolves, cats, babies...) are reeled in.</summary>
         public static bool HeavyMob(McProxy p)
         {
             if (p == null || p.body == null) return true;
             var s = p.body.size;
             float w = s.x / K, h = (s.y + (p.head != null ? p.head.GetComponent<BoxCollider>().size.y : 0f)) / K;
-            return w * w * h > 2.5f;
+            // Steve (0.6 x 1.8) is 0.65
+            return w * w * h > 0.5f;
         }
     }
 

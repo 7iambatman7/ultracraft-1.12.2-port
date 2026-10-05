@@ -28,7 +28,7 @@ namespace UltraBridge
         // the settings Minecraft's screen shows, with their types (f float, i int, b bool; l = a local pref)
         static readonly string[][] ReportedPrefs =
         {
-            new[] { "mouseSensitivity", "fl" }, new[] { "fieldOfView", "f" }, new[] { "screenShake", "f" }, new[] { "cameraTilt", "b" },
+            new[] { "difficulty", "i" }, new[] { "mouseSensitivity", "fl" }, new[] { "fieldOfView", "f" }, new[] { "screenShake", "f" }, new[] { "cameraTilt", "b" },
             new[] { "parryFlash", "b" }, new[] { "weaponHoldPosition", "i" }, new[] { "mouseReverseY", "b" }, new[] { "bloodEnabled", "bl" },
             new[] { "allVolume", "f" }, new[] { "musicVolume", "f" },
         };
@@ -69,6 +69,13 @@ namespace UltraBridge
                     // UKBIND Map/Action[/part] <glfw key | -1-mouse button | ->: rebind one of ULTRAKILL's controls (runtime only)
                     var a = rest.Trim().Split(' ');
                     if (a.Length >= 2) { PendingBinds[a[0]] = a[1]; if (levelPrepared) ApplyBinds(); }
+                    break;
+                }
+                case "GUN":
+                {
+                    // GUN <slot 1-6> <colour 0 blue, 1 green, 2 red>: a weapon's own key (Minecraft's ULTRAKILL Controls)
+                    var a = rest.Trim().Split(' ');
+                    if (a.Length >= 2 && levelPrepared) Net.Send("GUNINFO " + SwitchToGun(int.Parse(a[0]), int.Parse(a[1])));
                     break;
                 }
                 case "BINDINFO":
@@ -142,6 +149,19 @@ namespace UltraBridge
                     var opm = MonoSingleton<OptionsManager>.Instance;
                     if (opm != null) opm.mouseSensitivity = s;
                 }
+                if (key == "difficulty" && value is int d)
+                {
+                    // V1 took its difficulty in Start: its full health (200 on Harmless) follows now; enemies take it
+                    // as they spawn
+                    var nm = MonoSingleton<NewMovement>.Instance;
+                    if (nm != null)
+                    {
+                        NmDifficulty(nm) = d;
+                        if (nm.hp > MaxHp(nm)) nm.hp = MaxHp(nm);
+                        lastHp = -1;
+                        Plugin.Log.LogInfo("ULTRAKILL difficulty " + d + ": V1's full health " + MaxHp(nm));
+                    }
+                }
                 PrefsManager.onPrefChanged?.Invoke(key, value);
             }
             catch (Exception e) { Plugin.Log.LogWarning("setting " + key + ": " + e.Message); }
@@ -150,6 +170,27 @@ namespace UltraBridge
         /// <summary>The level is ready: every setting Ultracraft has made applies (again), and Minecraft hears the
         /// stored ones for its settings screen.</summary>
         static readonly Dictionary<string, string> PendingBinds = new Dictionary<string, string>();
+
+        /// <summary>Straight to one weapon: the variant in that slot with that colour (whichever version, Alternate or
+        /// not, V1 has out). Nothing if V1 doesn't own it, or it's already in hand.</summary>
+        string SwitchToGun(int slot, int colour)
+        {
+            var gc = MonoSingleton<GunControl>.Instance;
+            if (gc == null || slot < 1 || slot > gc.slots.Count) return "no slot";
+            var list = gc.slots[slot - 1];
+            var seen = new System.Text.StringBuilder();
+            for (int i = 0; i < list.Count; i++)
+            {
+                var icon = list[i] != null ? list[i].GetComponentInChildren<WeaponIcon>(true) : null;
+                int c = icon != null && icon.weaponDescriptor != null ? (int)icon.weaponDescriptor.variationColor : -1;
+                seen.Append(list[i] != null ? list[i].name : "null").Append('=').Append(c).Append(' ');
+                if (c != colour) continue;
+                if (gc.currentSlotIndex == slot && gc.currentVariationIndex == i && gc.currentWeapon == list[i]) return "already " + seen;
+                gc.SwitchWeapon(slot, i);
+                return "switched to " + i + " (" + seen + ")";
+            }
+            return "none of " + seen;
+        }
 
         /// <summary>The rebound controls as overrides on ULTRAKILL's own bindings (never saved to its files).</summary>
         void ApplyBinds()

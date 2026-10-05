@@ -29,6 +29,8 @@ public final class UkLink {
 	public static volatile int maxHp = 100;
 	public static volatile boolean dead;
 	public static volatile boolean ready;
+	/** While V1 isn't ready yet: the ULTRAKILL level it's on (shown with "loading V1", so a hang says where). */
+	public static volatile String loadingScene = "";
 
 	private UkLink() {}
 
@@ -58,6 +60,8 @@ public final class UkLink {
 						hp = Integer.parseInt(a[1]);
 						dead = a[2].equals("1");
 						if (a.length > 3) maxHp = Integer.parseInt(a[3]);
+					} else if (line.startsWith("LOADING ")) {
+						loadingScene = line.substring(8);
 					} else {
 						if (line.equals("READY")) ready = true;
 						INBOX.add(line);
@@ -69,6 +73,7 @@ public final class UkLink {
 			if (connected) INBOX.add("DISCONNECTED");
 			connected = false;
 			ready = false;
+			loadingScene = "";
 			out = null;
 			pose = null;
 			try {

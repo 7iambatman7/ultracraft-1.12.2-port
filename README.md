@@ -21,17 +21,21 @@ You need to own **ULTRAKILL** (Steam) and **Minecraft Java Edition**. Windows on
 
 Commands: `/uc help`.
 
+Stuck on "ULTRAKILL connected - loading V1..."? Update to the latest release: older ones waited forever on an ULTRAKILL
+save that hadn't finished the tutorial. The message now names the ULTRAKILL level it's waiting in.
+
 ## Settings
 
 **Ultracraft...** (title screen, pause menu, Options, or `/uc settings`) has a page for each of these:
-- **Enemies & Bosses**: Minecraft's mobs, ULTRAKILL's enemies, bosses and the time between them, arenas, enemies as Steve.
+- **Enemies & Bosses**: Minecraft's mobs, ULTRAKILL's enemies, bosses (the time between them, their difficulty, how often they
+  bring traits), arenas, enemies as Steve.
 - **Gameplay**: becoming V1, what breaks blocks, impact frames, starting ULTRAKILL with Minecraft.
 - **Shop & Rewards**: style rewards, the OP Shop, the sharp shop screen.
 - **Performance**: ULTRAKILL's resolution and frame rate, low-latency frames.
 - **Music**: ULTRAKILL's fight music, boss themes, calm music, volumes.
 - **Cheats**: ULTRAKILL's Sandbox cheats and Ultracraft's.
 - **ULTRAKILL Settings**: sensitivity, field of view, screen shake and the rest, as Ultracraft plays them.
-- **ULTRAKILL Controls**: rebind ULTRAKILL's keys.
+- **ULTRAKILL Controls**: rebind ULTRAKILL's keys, and give each weapon its own key.
 
 ## Enemies, arenas and rewards
 
@@ -100,6 +104,9 @@ them too. Other players show up as V1. Each player has their own P, gear and upg
 weapons...). Click an action, press the key or mouse button; Esc cancels. Minecraft's own action on that key steps aside
 while you're V1 with guns out. F8 switches V1/Steve and V switches guns/Minecraft hands.
 
+Each weapon (Piercer, Marksman, Core Eject, Firestarter...) can also have its own key, which switches straight to it.
+They're unbound until you set them; Esc on one unbinds it. The Alternate versions share their colour's key.
+
 With Minecraft hands out, V1 holds blocks, tools and food in ULTRAKILL's own arm (the Feedbacker's model, taken from
 your ULTRAKILL the first time it runs). **F5** works as V1 too: the camera moves behind V1 (or in front) and you see
 V1's body.
@@ -121,7 +128,7 @@ the weapon between standard and alternate.
 
 ## Build from source
 
-- Fabric mod: JDK 21, `cd fabric && ./gradlew build` → `fabric/build/libs/`.
+- Fabric mod: JDK 21, `cd fabric && ./gradlew build` → `fabric/build/1.21.11/libs/` (`-Pmc=1.20.1` for the 1.20.1 build, in progress).
 - ULTRAKILL plugin: .NET SDK, `dotnet build -c Release ultrabridge/UltraBridge.csproj -p:GameDir="<your ULTRAKILL folder>"`
   (it compiles against your own install's DLLs and copies the result into its BepInEx plugins).
 

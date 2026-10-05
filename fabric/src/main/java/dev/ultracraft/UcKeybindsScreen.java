@@ -42,7 +42,45 @@ public final class UcKeybindsScreen extends OptionsSubScreen {
 		new Bind("Weapon/Shotgun", "Shotgun", GLFW.GLFW_KEY_2),
 		new Bind("Weapon/Nailgun", "Nailgun", GLFW.GLFW_KEY_3),
 		new Bind("Weapon/Railcannon", "Railcannon", GLFW.GLFW_KEY_4),
-		new Bind("Weapon/RocketLauncher", "Rocket Launcher", GLFW.GLFW_KEY_5));
+		new Bind("Weapon/RocketLauncher", "Rocket Launcher", GLFW.GLFW_KEY_5),
+		// one key per weapon (unbound until set): "Gun/<slot>/<colour>" straight to that variant, which ULTRAKILL
+		// knows by its colour (blue, green, red); the Alternate versions share their colour
+		gun(1, 0, "Revolver: Piercer"), gun(1, 1, "Revolver: Marksman"), gun(1, 2, "Revolver: Sharpshooter"),
+		gun(2, 0, "Shotgun: Core Eject"), gun(2, 1, "Shotgun: Pump Charge"), gun(2, 2, "Shotgun: Sawed-On"),
+		gun(3, 0, "Nailgun: Attractor"), gun(3, 1, "Nailgun: Overheat"), gun(3, 2, "Nailgun: JumpStart"),
+		gun(4, 0, "Railcannon: Electric"), gun(4, 1, "Railcannon: Screwdriver"), gun(4, 2, "Railcannon: Malicious"),
+		gun(5, 0, "Rockets: Freezeframe"), gun(5, 1, "Rockets: S.R.S. Cannon"), gun(5, 2, "Rockets: Firestarter"));
+
+	/** No key. */
+	static final int UNBOUND = Integer.MIN_VALUE;
+
+	private static Bind gun(int slot, int colour, String label) {
+		return new Bind("Gun/" + slot + "/" + colour, label, UNBOUND);
+	}
+
+	/** The per-weapon keys aren't ULTRAKILL's own controls: Minecraft watches them and sends GUN (pollGunKeys). */
+	static boolean isGun(String action) {
+		return action.startsWith("Gun/");
+	}
+
+	private static final boolean[] gunDown = new boolean[16];
+
+	/** Guns out, nothing open: a weapon's key switches straight to it (ULTRAKILL: GUN slot colour). */
+	static void pollGunKeys(Minecraft mc, boolean ingame) {
+		long win = mc.getWindow().handle();
+		int g = 0;
+		for (Bind b : BINDS) {
+			if (!isGun(b.action)) continue;
+			int k = key(b);
+			boolean down = ingame && k != UNBOUND && (k < 0 ? GLFW.glfwGetMouseButton(win, -1 - k) == GLFW.GLFW_PRESS : GLFW.glfwGetKey(win, k) == GLFW.GLFW_PRESS);
+			if (down && !gunDown[g]) {
+				String[] a = b.action.split("/");
+				Ultracraft.gunKey(mc);
+				UkLink.send("GUN " + a[1] + " " + a[2]);
+			}
+			gunDown[g++] = down;
+		}
+	}
 
 	private final List<Button> buttons = new ArrayList<>();
 	/** The action waiting for a key, or -1. */
@@ -56,6 +94,7 @@ public final class UcKeybindsScreen extends OptionsSubScreen {
 	public static java.util.Set<String> reboundKeys() {
 		java.util.Set<String> keys = new java.util.HashSet<>();
 		for (int code : UltracraftConfig.ukBinds.values()) {
+			if (code == UNBOUND) continue;
 			keys.add(code < 0 ? InputConstants.Type.MOUSE.getOrCreate(-1 - code).getName() : InputConstants.Type.KEYSYM.getOrCreate(code).getName());
 		}
 		return keys;
@@ -66,6 +105,7 @@ public final class UcKeybindsScreen extends OptionsSubScreen {
 	}
 
 	static Component keyName(int code) {
+		if (code == UNBOUND) return Component.literal("-").withStyle(ChatFormatting.DARK_GRAY);
 		if (code < 0) return Component.literal(switch (-1 - code) {
 			case 0 -> "Left Click";
 			case 1 -> "Right Click";
@@ -90,7 +130,7 @@ public final class UcKeybindsScreen extends OptionsSubScreen {
 		}
 		row.add(Button.builder(Component.literal("Reset All"), btn -> {
 			UltracraftConfig.ukBinds.clear();
-			for (Bind bind : BINDS) UkLink.send("UKBIND " + bind.action + " -");
+			for (Bind bind : BINDS) if (!isGun(bind.action)) UkLink.send("UKBIND " + bind.action + " -");
 			waiting = -1;
 			refresh();
 		}).width(150).build());
@@ -113,7 +153,7 @@ public final class UcKeybindsScreen extends OptionsSubScreen {
 		Bind b = BINDS.get(waiting);
 		if (code == b.def) UltracraftConfig.ukBinds.remove(b.action);
 		else UltracraftConfig.ukBinds.put(b.action, code);
-		UkLink.send("UKBIND " + b.action + " " + code);
+		if (!isGun(b.action)) UkLink.send("UKBIND " + b.action + " " + code);
 		waiting = -1;
 		refresh();
 	}
@@ -123,6 +163,8 @@ public final class UcKeybindsScreen extends OptionsSubScreen {
 		if (waiting >= 0) {
 			// Esc cancels
 			if (e.key() == GLFW.GLFW_KEY_ESCAPE) {
+				// Esc: cancels, or on a weapon's key, unbinds it
+				if (isGun(BINDS.get(waiting).action)) UltracraftConfig.ukBinds.remove(BINDS.get(waiting).action);
 				waiting = -1;
 				refresh();
 			} else {

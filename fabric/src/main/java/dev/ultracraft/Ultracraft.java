@@ -193,6 +193,11 @@ public final class Ultracraft implements ClientModInitializer {
 		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, Identifier.fromNamespaceAndPath("ultracraft", "v1"), (ctx, t) -> renderV1(ctx));
 	}
 
+	/** A weapon's own key: with Minecraft's items out, the guns come back for it. */
+	static void gunKey(Minecraft mc) {
+		if (hands) setHands(mc, false);
+	}
+
 	private static boolean hungry() {
 		LocalPlayer p = Minecraft.getInstance().player;
 		return p != null && p.getFoodData().getFoodLevel() < 18;
@@ -241,13 +246,15 @@ public final class Ultracraft implements ClientModInitializer {
 		}
 		if (!active) {
 			if (UkLink.connected && mc.player != null) {
-				ctx.drawString(mc.font, UkLink.ready ? "ULTRAKILL ready - press F8 to become V1" : "ULTRAKILL connected - loading V1...", 4, 4, 0xFFFFFF00);
+				String where = UkLink.loadingScene.isEmpty() ? "" : " (" + UkLink.loadingScene + ")";
+				ctx.drawString(mc.font, UkLink.ready ? "ULTRAKILL ready - press F8 to become V1" : "ULTRAKILL connected - loading V1..." + where, 4, 4, 0xFFFFFF00);
 			}
 			return;
 		}
 		sendMobsDrawn(mc);
 		sendPuppets(mc);
 		sendView(mc);
+		UcKeybindsScreen.pollGunKeys(mc, mc.screen == null && !uiMode && mc.mouseHandler.isMouseGrabbed());
 		Movement.frame(mc);
 		// asleep: Minecraft's own view from the bed (its fade to morning), no V1 layer
 		if (Movement.sleeping) return;
@@ -679,7 +686,7 @@ public final class Ultracraft implements ClientModInitializer {
 			UcNet.toServer(msg);
 		} else if (msg.startsWith("UI ")) {
 			setUiMode(mc, msg.endsWith("1"));
-		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED|SPAWNABLES|MUSICINFO|ARMINFO|COMBATTEST) .*")) {
+		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED|SPAWNABLES|MUSICINFO|ARMINFO|COMBATTEST|GUNINFO) .*")) {
 			// debug answers (DebugCommands "uk ...")
 			org.slf4j.LoggerFactory.getLogger("ultracraft").info("[uk] {}", msg);
 		} else if (msg.startsWith("SHOPZONE ")) {

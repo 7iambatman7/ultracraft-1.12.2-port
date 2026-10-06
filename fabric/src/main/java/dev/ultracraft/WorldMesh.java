@@ -42,6 +42,9 @@ public final class WorldMesh {
 		return Math.max(4, Math.min(RH, UltracraftConfig.terrainRange / 16));
 	}
 	private static final int RV = 4; // sections above and below
+	// and around each of ULTRAKILL's enemies (a boss V1 ran from, one up on a cliff): the ground under it stays, or it
+	// would fall through the world
+	private static final int AH = 1, A_BELOW = 2, A_ABOVE = 1, MAX_ANCHORS = 24;
 	private static final long BUDGET_NANOS = 3_000_000L;
 	private static final int[][] OFFSETS;
 
@@ -101,19 +104,30 @@ public final class WorldMesh {
 			reset();
 		}
 		int cx = center.getX() >> 4, cy = center.getY() >> 4, cz = center.getZ() >> 4;
-		int minSY = level.getMinSectionY(), maxSY = level.getMaxSectionY();
 		long start = System.nanoTime();
 		int rh = rh();
+		boolean done = true;
 		for (int[] o : OFFSETS) {
 			if (Math.abs(o[0]) > rh || Math.abs(o[2]) > rh) continue;
-			int sx = cx + o[0], sy = cy + o[1], sz = cz + o[2];
-			if (sy < minSY || sy > maxSY) continue;
-			long key = SectionPos.asLong(sx, sy, sz);
-			if (sent.containsKey(key) && !dirty.contains(key)) continue;
-			if (!level.hasChunk(sx, sz)) continue;
-			dirty.remove(key);
-			build(level, sx, sy, sz, key);
-			if (System.nanoTime() - start > BUDGET_NANOS) break;
+			if (!send(level, cx + o[0], cy + o[1], cz + o[2])) continue;
+			if (System.nanoTime() - start > BUDGET_NANOS) {
+				done = false;
+				break;
+			}
+		}
+		List<int[]> anchors = anchors(cx, cy, cz, rh);
+		if (done) {
+			outer:
+			for (int[] a : anchors) {
+				for (int dy = -A_BELOW; dy <= A_ABOVE; dy++) {
+					for (int dx = -AH; dx <= AH; dx++) {
+						for (int dz = -AH; dz <= AH; dz++) {
+							if (!send(level, a[0] + dx, a[1] + dy, a[2] + dz)) continue;
+							if (System.nanoTime() - start > BUDGET_NANOS) break outer;
+						}
+					}
+				}
+			}
 		}
 		if (++ticks % 20 == 0) {
 			Iterator<Map.Entry<Long, Boolean>> it = sent.entrySet().iterator();
@@ -122,12 +136,49 @@ public final class WorldMesh {
 				long key = e.getKey();
 				int x = SectionPos.x(key), y = SectionPos.y(key), z = SectionPos.z(key);
 				if (Math.abs(x - cx) > rh + 1 || Math.abs(y - cy) > RV + 1 || Math.abs(z - cz) > rh + 1) {
+					if (anchored(anchors, x, y, z)) continue;
 					if (e.getValue()) UkLink.send("SECX " + x + " " + y + " " + z);
 					dirty.remove(key);
 					it.remove();
 				}
 			}
 		}
+	}
+
+	/** Builds and sends one section if ULTRAKILL needs it (new or changed); false if there was nothing to do. */
+	private static boolean send(ClientLevel level, int sx, int sy, int sz) {
+		if (sy < level.getMinSectionY() || sy > level.getMaxSectionY()) return false;
+		long key = SectionPos.asLong(sx, sy, sz);
+		if (sent.containsKey(key) && !dirty.contains(key)) return false;
+		if (!level.hasChunk(sx, sz)) return false;
+		dirty.remove(key);
+		build(level, sx, sy, sz, key);
+		return true;
+	}
+
+	/** The sections of ULTRAKILL's enemies outside the range around V1, nearest first. */
+	private static List<int[]> anchors(int cx, int cy, int cz, int rh) {
+		List<int[]> l = new ArrayList<>();
+		for (Lighting.Spot s : Lighting.enemySpots()) {
+			int x = (int) Math.floor(s.x()) >> 4, y = (int) Math.floor(s.y()) >> 4, z = (int) Math.floor(s.z()) >> 4;
+			if (Math.abs(x - cx) + AH <= rh && Math.abs(z - cz) + AH <= rh && y - A_BELOW >= cy - RV && y + A_ABOVE <= cy + RV) continue;
+			l.add(new int[] {x, y, z});
+		}
+		l.sort(Comparator.comparingInt(a -> (a[0] - cx) * (a[0] - cx) + (a[1] - cy) * (a[1] - cy) + (a[2] - cz) * (a[2] - cz)));
+		return l.size() > MAX_ANCHORS ? l.subList(0, MAX_ANCHORS) : l;
+	}
+
+	private static boolean anchored(List<int[]> anchors, int x, int y, int z) {
+		for (int[] a : anchors) {
+			if (Math.abs(x - a[0]) <= AH + 1 && Math.abs(z - a[2]) <= AH + 1 && y >= a[1] - A_BELOW - 1 && y <= a[1] + A_ABOVE + 1) return true;
+		}
+		return false;
+	}
+
+	/** Debug: sections ULTRAKILL has now, and how many are kept for its enemies. */
+	static String info(BlockPos center) {
+		int cx = center.getX() >> 4, cy = center.getY() >> 4, cz = center.getZ() >> 4;
+		return "sections=" + sent.size() + " anchors=" + anchors(cx, cy, cz, rh()).size() + " enemies=" + Lighting.enemySpots().size();
 	}
 
 	private static int idx(int x, int y, int z) {

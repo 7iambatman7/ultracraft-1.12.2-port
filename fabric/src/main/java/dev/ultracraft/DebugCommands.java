@@ -101,6 +101,22 @@ final class DebugCommands {
 				else UltracraftConfig.performanceDefaults();
 				UltracraftConfig.sendOpts();
 			}
+			// terrain: the sections ULTRAKILL has, and those kept around its enemies
+			case "terrain" -> org.slf4j.LoggerFactory.getLogger("ultracraft").info("[debug] terrain {}", WorldMesh.info(mc.player.blockPosition()));
+			// fps [tag]: Minecraft's frame rate (last second), and ULTRAKILL's (its log)
+			case "fps" -> {
+				String tag = a.length > 1 ? a[1] : "";
+				org.slf4j.LoggerFactory.getLogger("ultracraft").info("[debug] fps {} mc={} {}", tag, mc.getFps(), UkFrame.rateInfo());
+				UkLink.send("FPSINFO " + tag);
+			}
+			// fpscap <n>: Minecraft's frame limit (260 = unlimited), ULTRAKILL's follows
+			case "fpscap" -> {
+				mc.options.framerateLimit().set(Integer.parseInt(a[1]));
+				UltracraftConfig.sendOpts();
+			}
+			// proj x y z: where Minecraft's camera puts that point on screen (-1..1 each way; ULTRAKILL's: "uk PROJ x y z")
+			case "proj" -> org.slf4j.LoggerFactory.getLogger("ultracraft").info("[debug] proj {} {} {} -> {}", a[1], a[2], a[3],
+				mc.gameRenderer.projectPointToScreen(new net.minecraft.world.phys.Vec3(Double.parseDouble(a[1]), Double.parseDouble(a[2]), Double.parseDouble(a[3]))));
 			case "picker" -> mc.setScreen(new UcMusicScreen(new UcSettingsScreen(null)));
 			case "cheat" -> UcCheats.debugSet(a[1], a[2].equals("1"));
 			case "respawn" -> mc.player.respawn();

@@ -65,10 +65,11 @@ public abstract class MinecraftMixin {
 		dev.ultracraft.UkFrame.waitForNext();
 	}
 
-	/** ...instead of Minecraft's own frame limit (ULTRAKILL's cap follows it, so the rate stays the same). */
+	/** ...instead of Minecraft's own frame limit (ULTRAKILL's cap follows it, so the rate stays the same); when it isn't
+	 * waiting (ULTRAKILL can't keep up), not far past ULTRAKILL's rate. */
 	@org.spongepowered.asm.mixin.injection.Redirect(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/FramerateLimitTracker;getFramerateLimit()I"))
 	private int ultracraft$noLimitInLockStep(com.mojang.blaze3d.platform.FramerateLimitTracker tracker) {
-		return dev.ultracraft.UkFrame.locked ? 260 : tracker.getFramerateLimit();
+		return dev.ultracraft.UkFrame.locked ? 260 : dev.ultracraft.UkFrame.freeRunLimit(tracker.getFramerateLimit());
 	}
 
 	/** Esc closes ULTRAKILL's open menu (it is forwarded), so it must not also open Minecraft's pause screen. */

@@ -59,6 +59,8 @@ namespace UltraBridge
             var gz = I != null ? I.McGoreZone() : null;
             if (bsm == null || gz == null || !bsm.goreOn || !ExtraGore) return;
             size = Mathf.Clamp(size, 0.6f, 6f);
+            // ULTRAKILL's own enemies: the bursts come out of the body and go where it goes
+            var body = eid != null && eid.GetComponent<McProxy>() == null ? BodyPart(eid, at) : null;
             deaths.Add(new Death { at = at, radius = Mathf.Clamp(1.2f + size * 0.6f, 1.5f, 4f) * K, until = Time.time + 4f });
             if (deaths.Count > 64) deaths.RemoveAt(0);
             // everything comes out of the body itself, and sprays from there
@@ -76,6 +78,7 @@ namespace UltraBridge
                     burst.transform.localScale = Vector3.one * Mathf.Clamp(size / 1.5f, 0.8f, 3f);
                     gz.SetGoreZone(burst);
                     NoOrgans(burst);
+                    OnBody(burst, body);
                 }
                 // gibs, thrown hard
                 // no gibs: ULTRAKILL's organ pieces looked like big entrails on Minecraft's mobs
@@ -99,6 +102,51 @@ namespace UltraBridge
                 var p = at + Random.insideUnitSphere * spread;
                 SpawnGore(eid, BurstGore[i % BurstGore.Length], p, false, 3);
             }
+        }
+
+        /// <summary>The part of a body nearest a point (one of its hitboxes): a chest burst there moves and falls with the
+        /// corpse.</summary>
+        static Transform BodyPart(EnemyIdentifier eid, Vector3 at)
+        {
+            Transform best = null;
+            float bd = float.MaxValue;
+            foreach (var c in eid.GetComponentsInChildren<Collider>())
+            {
+                if (c == null || c.isTrigger) continue;
+                float d = (c.bounds.center - at).sqrMagnitude;
+                if (d < bd) { bd = d; best = c.transform; }
+            }
+            return best != null ? best : eid.transform;
+        }
+
+        /// <summary>A chest burst fountains for a while: ULTRAKILL hangs its own on a body that stays. Ours come with a death
+        /// (a kill, a blast, Kill All Enemies) whose body may be thrown, blown apart or gone at once, and a fountain left
+        /// behind sprayed on out of thin air where the body was. So ours ride along with the body (if it has one) for their
+        /// first moment and only spurt; the blood already out falls and stains as before.</summary>
+        internal static void OnBody(GameObject burst, Transform body)
+        {
+            if (I != null) I.StartCoroutine(Spurt(burst, body));
+        }
+
+        const float SpurtSeconds = 0.6f;
+
+        static System.Collections.IEnumerator Spurt(GameObject burst, Transform body)
+        {
+            var offset = body != null ? burst.transform.position - body.position : Vector3.zero;
+            var at = burst.transform.position;
+            float until = Time.time + SpurtSeconds;
+            while (Time.time < until)
+            {
+                yield return null;
+                // (pooled: moved by anything but us, it's another death's now)
+                if (burst == null || !burst.activeInHierarchy || (burst.transform.position - at).sqrMagnitude > 0.01f) yield break;
+                if (body != null && body.gameObject.activeInHierarchy)
+                {
+                    at = body.position + offset;
+                    burst.transform.position = at;
+                }
+            }
+            foreach (var ps in burst.GetComponentsInChildren<ParticleSystem>()) ps.Stop(false, ParticleSystemStopBehavior.StopEmitting);
         }
 
         /// <summary>One of ULTRAKILL's own enemies died here.</summary>

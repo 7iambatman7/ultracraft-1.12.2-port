@@ -366,8 +366,13 @@ namespace UltraBridge
 
         // ------------------------------------------------------------ main loop
 
+        // debug FPSINFO: how long ULTRAKILL's recent frames took
+        readonly float[] frameTimes = new float[240];
+        int frameCount;
+
         void Update()
         {
+            frameTimes[frameCount++ % frameTimes.Length] = Time.unscaledDeltaTime;
             // Low-Latency Frames: the last frame's readback is finished now (the GPU drew it while this frame waited its
             // turn, so this rarely waits), so Minecraft has it at once and sends its input straight back: a moment for
             // that input, so this frame already turns with it
@@ -1513,10 +1518,13 @@ namespace UltraBridge
             }
         }
 
+        /// <summary>Whether the landing under way is a slam's (a ground pound), not a jump's or a fall's.</summary>
+        public bool Slamming(NewMovement nm) => slammed || (nm.gc != null && nm.gc.heavyFall);
+
         /// <summary>How many blocks V1 fell into the slam it's landing (0 for a landing that isn't a slam).</summary>
         public float SlamDrop(NewMovement nm)
         {
-            return slammed || (nm.gc != null && nm.gc.heavyFall) ? Mathf.Max(0f, fallPeak - nm.transform.position.y) / K : 0f;
+            return Slamming(nm) ? Mathf.Max(0f, fallPeak - nm.transform.position.y) / K : 0f;
         }
 
         /// <summary>A slam landed: from high enough, Minecraft blows a crater that grows with the drop (SLAM x y z
@@ -2095,6 +2103,9 @@ namespace UltraBridge
         // stand-in for each (UKE) that mobs target and hit (EHURT), and they in turn go for hostile mobs.
         readonly Dictionary<int, EnemyIdentifier> ukEnemies = new Dictionary<int, EnemyIdentifier>();
         readonly Dictionary<int, EnemyIdentifier> lastUkEnemies = new Dictionary<int, EnemyIdentifier>();
+        // where each was last seen (its middle): one that dies and goes in the same moment (a drone's blast, Gabriel)
+        // can't be asked any more
+        readonly Dictionary<int, Vector3> ukEnemyAt = new Dictionary<int, Vector3>();
         // enemies V1 attacked stay on V1 for a while, as ULTRAKILL's own "unless attacked" rule
         readonly Dictionary<int, float> v1AggroUntil = new Dictionary<int, float>();
         float nextUkReport, nextRetarget;
@@ -2143,6 +2154,7 @@ namespace UltraBridge
                 int id = eid.GetInstanceID();
                 ukEnemies[id] = eid;
                 var b = EnemyBounds(eid);
+                ukEnemyAt[id] = b.center;
                 var feet = UkToMc(new Vector3(b.center.x, b.min.y, b.center.z));
                 float w = Mathf.Clamp(Mathf.Max(b.size.x, b.size.z) / K, 0.3f, 12f), h = Mathf.Clamp(b.size.y / K, 0.3f, 16f);
                 sb.Append(id).Append(',').Append(eid.enemyType).Append(',').Append(S(feet.x)).Append(',').Append(S(feet.y)).Append(',').Append(S(feet.z))
@@ -2151,16 +2163,21 @@ namespace UltraBridge
                   .Append(',').Append(PuppetKey(eid)).Append(',').Append(S(eid.transform.eulerAngles.y)).Append(',').Append(AnimState(eid)).Append(';');
             }
             Net.Send(sb.ToString());
-            // the ones that died since: Minecraft drops their experience
+            // the ones that died since: Minecraft drops their experience (a destroyed enemy's fields still read: one
+            // that died and was removed at once died all the same)
             foreach (var kv in lastUkEnemies)
             {
-                if (!ukEnemies.ContainsKey(kv.Key) && kv.Value != null && kv.Value.dead)
+                if (ukEnemies.ContainsKey(kv.Key)) continue;
+                ukEnemyAt.TryGetValue(kv.Key, out var at);
+                ukEnemyAt.Remove(kv.Key);
+                if ((object)kv.Value != null && kv.Value.dead)
                 {
-                    ReportEnemyDeath(kv.Value);
+                    ReportEnemyDeath(kv.Value, at);
                     // its puppets in the other players' games die with it
                     Net.Send("UKDIE " + kv.Key);
                 }
             }
+            SweepGrind();
             if (Time.unscaledTime >= nextRetarget)
             {
                 nextRetarget = Time.unscaledTime + 0.5f;
@@ -3487,6 +3504,7 @@ namespace UltraBridge
                     burst.transform.localScale = Vector3.one * Mathf.Clamp(Mathf.Max(w, h) / 3.5f, 0.6f, 3f);
                     if (gz != null) gz.SetGoreZone(burst);
                     NoOrgans(burst);
+                    OnBody(burst, null);
                 }
                 int gibs = 0;
                 for (int i = 0; i < gibs; i++)
@@ -3754,8 +3772,9 @@ namespace UltraBridge
                 case Chainsaw cs: return Mathf.Max(cs.damage, 0.5f);
                 case ShotgunHammer h: return Mathf.Max(HammerDamage(h), 2f);
                 case Shotgun _: return 1f;
-                // a heavy landing cracks the ground; a slam from higher cracks it harder (from SlamCraterDrop up it blows a crater)
-                case NewMovement nm: return 2f + Mathf.Min(Bridge.I != null ? Bridge.I.SlamDrop(nm) * 0.5f : 0f, 8f);
+                // only a slam (ground pound) cracks the ground, harder from higher (from SlamCraterDrop up it blows a crater);
+                // a hard landing from a jump or a fall leaves the block alone
+                case NewMovement nm: return Bridge.I != null && Bridge.I.Slamming(nm) ? 2f + Mathf.Min(Bridge.I.SlamDrop(nm) * 0.5f, 8f) : 0f;
             }
             return 0f;
         }
@@ -3910,7 +3929,33 @@ namespace UltraBridge
     [HarmonyPatch(typeof(EnemyIdentifier), nameof(EnemyIdentifier.Death), new Type[] { typeof(bool) })]
     static class EidDeath
     {
-        static bool Prefix(EnemyIdentifier __instance) => __instance.GetComponent<McProxy>() == null;
+        static int logged;
+
+        static bool Prefix(EnemyIdentifier __instance, out bool __state)
+        {
+            __state = __instance.dead;
+            return __instance.GetComponent<McProxy>() == null;
+        }
+
+        // what killed each of ULTRAKILL's own enemies (an enemy that vanishes without a fight shows here)
+        static void Postfix(EnemyIdentifier __instance, bool __state) => Log(__instance, __state, "");
+
+        internal static void Log(EnemyIdentifier __instance, bool __state, string how)
+        {
+            if (__state || !__instance.dead || __instance.GetComponent<McProxy>() != null || logged >= 60) return;
+            logged++;
+            var nm = MonoSingleton<NewMovement>.Instance;
+            float d = nm != null ? Vector3.Distance(nm.transform.position, __instance.transform.position) / Bridge.K : -1f;
+            Plugin.Log.LogInfo("enemy died" + how + ": " + __instance.enemyType + " hitter=" + __instance.hitter + " " + d.ToString("0") + " blocks from V1, y "
+                + (Bridge.I != null ? Bridge.I.UkToMc(__instance.transform.position).y.ToString("0") : "?"));
+        }
+    }
+
+    [HarmonyPatch(typeof(EnemyIdentifier), nameof(EnemyIdentifier.InstaKill))]
+    static class EidInstaKill
+    {
+        static void Prefix(EnemyIdentifier __instance, out bool __state) => __state = __instance.dead;
+        static void Postfix(EnemyIdentifier __instance, bool __state) => EidDeath.Log(__instance, __state, " (instakill)");
     }
 
     // ---------------------------------------------------------------- Win32

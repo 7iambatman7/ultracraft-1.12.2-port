@@ -137,6 +137,7 @@ public final class UkFrame {
 		if (version != 2 || w <= 0 || h <= 0 || (long) w * h > MAX_PIXELS || slot < 0 || slot >= SLOTS || (maskBpp != 1 && maskBpp != 4)) return false;
 		if (color == null || w != texW || h != texH || maskBpp != texMaskBpp) makeTextures(w, h, maskBpp);
 		if (seq != lastSeq) {
+			countRate(seq);
 			lastSeq = seq;
 			// how long ago ULTRAKILL drew it (its clock, from ours and the offset the pings found)
 			int drawnAt = map.getInt(28);
@@ -208,6 +209,39 @@ public final class UkFrame {
 	 */
 	private static int recentFrames, recentLate;
 	private static long freeRunUntil;
+
+	// how many frames a second ULTRAKILL is really drawing (frames it numbered, over the time they took to come)
+	private static double ukRate = 60.0;
+	private static int rateSeq = -1;
+	private static long rateAt;
+
+	private static void countRate(int seq) {
+		long now = System.nanoTime();
+		int n = seq - rateSeq;
+		if (rateSeq >= 0 && n > 0 && n < 200 && now > rateAt) {
+			double inst = n / ((now - rateAt) / 1e9);
+			ukRate += (Math.min(inst, 1000.0) - ukRate) * 0.05;
+		}
+		rateSeq = seq;
+		rateAt = now;
+	}
+
+	/**
+	 * Minecraft's frame limit while it isn't waiting for ULTRAKILL (it can't keep up): not much past ULTRAKILL's own
+	 * rate. Every Minecraft frame shows ULTRAKILL's latest, so frames beyond that are the same picture drawn again, and on
+	 * a graphics card both games share they take the time ULTRAKILL needed (an unlimited Minecraft ran at 900 while
+	 * ULTRAKILL dropped to 30).
+	 */
+	/** Debug: ULTRAKILL's frame rate as Minecraft gets its frames, and whether Minecraft is waiting for them. */
+	public static String rateInfo() {
+		return String.format(java.util.Locale.ROOT, "ukRate=%.0f waiting=%b", ukRate, UltracraftConfig.lockStep && System.nanoTime() >= freeRunUntil);
+	}
+
+	public static int freeRunLimit(int limit) {
+		if (!UltracraftConfig.lockStep || System.nanoTime() >= freeRunUntil || !(Ultracraft.active || Ultracraft.steveDrawn) || color == null) return limit;
+		int cap = Math.max(30, (int) Math.ceil(ukRate * 1.25));
+		return limit >= 260 ? cap : Math.min(limit, cap);
+	}
 
 	public static void waitForNext() {
 		locked = false;

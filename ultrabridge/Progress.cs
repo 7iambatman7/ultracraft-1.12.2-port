@@ -856,6 +856,10 @@ namespace UltraBridge
             public float lift;
             public Vector3 lastAt;
             public bool deathSeen;
+            // where it last stood on something (a boss that drops out of the world comes back there)
+            public Vector3 ground;
+            public bool hasGround;
+            public int putBack;
         }
 
         class BossFight
@@ -1060,6 +1064,23 @@ namespace UltraBridge
             bossEids.Clear();
         }
 
+        /// <summary>A boss that fell out of the world, back on the ground it last stood on, still.</summary>
+        void PutBack(BossPart part)
+        {
+            var to = part.ground + Vector3.up * (part.lift + 0.5f * K);
+            var delta = to - part.eid.transform.position;
+            foreach (var rb in part.go.GetComponentsInChildren<Rigidbody>())
+            {
+                if (rb.isKinematic) continue;
+                rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+            var agent = part.eid.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null && agent.enabled && agent.isOnNavMesh) agent.Warp(to);
+            else part.go.transform.position += delta;
+            Physics.SyncTransforms();
+        }
+
         /// <summary>Each boss's state for Minecraft: where it is (BOSSPOS id x y z health), and once it's beaten
         /// (BOSSDEAD id x y z) or gone without being beaten (BOSSGONE id why).</summary>
         void UpdateBosses(NewMovement nm)
@@ -1108,12 +1129,32 @@ namespace UltraBridge
                         gone++;
                         continue;
                     }
-                    // fallen out of the world
-                    if (part.eid.transform.position.y < McToUk(new Vector3(0f, -128f, 0f)).y)
+                    // fallen out of the world (through ground ULTRAKILL didn't have yet, or off the edge): back where it
+                    // last stood, a few times; after that, gone
+                    float y = part.eid.transform.position.y;
+                    if (report && !part.eid.dead && Physics.Raycast(part.eid.transform.position + Vector3.up * K, Vector3.down, out var under, 4f * K,
+                            LayerMaskDefaults.Get(LMD.Environment), QueryTriggerInteraction.Ignore))
                     {
-                        Destroy(part.go);
-                        gone++;
-                        continue;
+                        part.ground = under.point;
+                        part.hasGround = true;
+                    }
+                    bool outOfWorld = y < McToUk(new Vector3(0f, -128f, 0f)).y;
+                    // (a deep drop with ground at its bottom is a fall, not out of the world)
+                    if (outOfWorld || (report && part.hasGround && y < part.ground.y - 40f * K
+                            && !Physics.Raycast(part.eid.transform.position, Vector3.down, 96f * K, LayerMaskDefaults.Get(LMD.Environment), QueryTriggerInteraction.Ignore)))
+                    {
+                        if (part.hasGround && part.putBack < 3)
+                        {
+                            part.putBack++;
+                            PutBack(part);
+                            Plugin.Log.LogInfo("boss " + f.id + ": " + f.key + " fell out of the world, put back where it stood (" + part.putBack + ")");
+                        }
+                        else if (outOfWorld)
+                        {
+                            Destroy(part.go);
+                            gone++;
+                            continue;
+                        }
                     }
                     hp += Mathf.Max(0f, part.eid.health);
                     if (!haveAt)

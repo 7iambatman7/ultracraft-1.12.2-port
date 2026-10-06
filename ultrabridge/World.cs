@@ -68,7 +68,9 @@ namespace UltraBridge
                     // SPAWNAT <enemy> x y z [kind]: one of ULTRAKILL's enemies appears there (feet, Minecraft coordinates);
                     // kind 1 came with the dark (and despawns far away), 2 is a Cyber Grind wave's
                     var a = rest.Split(' ');
-                    if (a.Length >= 4 && levelPrepared && originSet) SpawnAt(a[0], new Vector3(F(a[1]), F(a[2]), F(a[3])), a.Length > 4 ? int.Parse(a[4]) : 0);
+                    int kind = a.Length > 4 ? int.Parse(a[4]) : 0;
+                    if (a.Length >= 4 && levelPrepared && originSet) SpawnAt(a[0], new Vector3(F(a[1]), F(a[2]), F(a[3])), kind);
+                    else if (kind == 2) Net.Send("GRINDGONE 1");
                     break;
                 }
                 case "GRINDSTATE":
@@ -142,6 +144,53 @@ namespace UltraBridge
                         if (n > 60) break;
                     }
                     Net.Send(sb.ToString());
+                    break;
+                }
+                case "PROJ":
+                {
+                    // debug: PROJ x y z (Minecraft's coordinates): where ULTRAKILL's camera puts that point on screen (-1..1)
+                    var a = rest.Split(' ');
+                    var cc = levelPrepared ? MonoSingleton<CameraController>.Instance : null;
+                    if (cc == null || a.Length < 3) break;
+                    var v = cc.cam.WorldToViewportPoint(McToUk(new Vector3(F(a[0]), F(a[1]), F(a[2]))));
+                    Plugin.Log.LogInfo("PROJ " + rest.Trim() + " -> (" + S(v.x * 2f - 1f) + ", " + S(v.y * 2f - 1f) + ") roll " + S(cc.cam.transform.eulerAngles.z));
+                    break;
+                }
+                case "LEAN":
+                    // debug: LEAN deg: ULTRAKILL's camera leans that far on top of its own tilt (0: off)
+                    DebugLean.degrees = F(rest.Trim());
+                    break;
+                case "ENEMIES":
+                {
+                    // debug: every one of ULTRAKILL's own enemies in the scene, switched off or not (alive, health, where)
+                    var nm = levelPrepared ? MonoSingleton<NewMovement>.Instance : null;
+                    var sb = new StringBuilder("ENEMIES");
+                    int n = 0;
+                    foreach (var e in Resources.FindObjectsOfTypeAll<EnemyIdentifier>())
+                    {
+                        if (e == null || !e.gameObject.scene.IsValid() || IsProxy(e) || IsPuppet(e)) continue;
+                        n++;
+                        var mc = UkToMc(e.transform.position);
+                        sb.Append(" | ").Append(e.enemyType).Append(" active=").Append(e.gameObject.activeInHierarchy).Append(" dead=").Append(e.dead)
+                          .Append(" hp=").Append(S(e.health)).Append(" at ").Append(mc.ToString("F1"))
+                          .Append(" from V1 ").Append(nm != null ? (Vector3.Distance(nm.transform.position, e.transform.position) / K).ToString("0") : "?");
+                    }
+                    sb.Insert(7, " n=" + n);
+                    Plugin.Log.LogInfo(sb.ToString());
+                    break;
+                }
+                case "FPSINFO":
+                {
+                    // debug: ULTRAKILL's frame rate over its last frames (average, and the slowest one in twenty)
+                    int c = Mathf.Min(frameCount, frameTimes.Length);
+                    if (c == 0) break;
+                    var t = new float[c];
+                    System.Array.Copy(frameTimes, t, c);
+                    System.Array.Sort(t);
+                    float sum = 0f;
+                    foreach (var f in t) sum += f;
+                    Plugin.Log.LogInfo("FPSINFO " + rest.Trim() + " fps=" + (c / sum).ToString("0") + " avg=" + (sum / c * 1000f).ToString("0.0") + "ms p95="
+                        + (t[(int)(c * 0.95f)] * 1000f).ToString("0.0") + "ms target=" + Application.targetFrameRate + " res=" + Screen.width + "x" + Screen.height);
                     break;
                 }
                 case "CUTINFO":
@@ -384,6 +433,7 @@ namespace UltraBridge
             shove = Vector3.zero;
             naturals.Clear();
             lastUkEnemies.Clear();
+            ukEnemyAt.Clear();
             suns.Clear();
             sunOrig.Clear();
             rained.Clear();
@@ -636,6 +686,39 @@ namespace UltraBridge
         // run ends
         readonly Dictionary<EnemyIdentifier, GameObject> grindEnemies = new Dictionary<EnemyIdentifier, GameObject>();
 
+        /// <summary>The Cyber Grind's enemies that ended without being reported: died before Minecraft ever heard of them
+        /// (a kill in their first moment), or gone without dying (fell out of the world). Either way the wave counts them
+        /// (GRINDGONE: no experience for one that didn't die).</summary>
+        void SweepGrind()
+        {
+            if (grindEnemies.Count == 0) return;
+            List<EnemyIdentifier> ended = null;
+            foreach (var kv in grindEnemies)
+            {
+                var eid = kv.Key;
+                bool dead = (object)eid != null && eid.dead;
+                if (dead && !ukEnemies.ContainsKey(eid.GetInstanceID()) && !lastUkEnemies.ContainsKey(eid.GetInstanceID())) (ended ??= new List<EnemyIdentifier>()).Add(eid);
+                else if (!dead && (eid == null || kv.Value == null)) (ended ??= new List<EnemyIdentifier>()).Add(eid);
+            }
+            if (ended == null) return;
+            foreach (var eid in ended)
+            {
+                if ((object)eid != null && eid.dead)
+                {
+                    var go = grindEnemies[eid];
+                    var nm = MonoSingleton<NewMovement>.Instance;
+                    ReportEnemyDeath(eid, go != null ? go.transform.position : nm != null ? nm.transform.position : Vector3.zero);
+                    grindEnemies.Remove(eid);
+                }
+                else
+                {
+                    grindEnemies.Remove(eid);
+                    Net.Send("GRINDGONE 1");
+                    Plugin.Log.LogInfo("grind enemy gone without dying");
+                }
+            }
+        }
+
         void ClearGrind()
         {
             foreach (var kv in grindEnemies) if (kv.Value != null) Destroy(kv.Value);
@@ -651,6 +734,8 @@ namespace UltraBridge
                 Net.Send("SPAWNED none " + name);
                 // Minecraft stops asking for an enemy this ULTRAKILL doesn't have
                 if (so == null) Net.Send("NOSPAWN " + name);
+                // a wave's enemy that never came isn't waited for
+                if (kind == 2) Net.Send("GRINDGONE 1");
                 return null;
             }
             var p = McToUk(mcFeet);
@@ -701,14 +786,15 @@ namespace UltraBridge
 
         /// <summary>UKDEAD type x y z rank grind: one of ULTRAKILL's enemies died near V1; Minecraft drops its experience
         /// (more the higher V1's style rank). grind is 1 for a Cyber Grind wave's enemy.</summary>
-        void ReportEnemyDeath(EnemyIdentifier eid)
+        void ReportEnemyDeath(EnemyIdentifier eid, Vector3 lastAt)
         {
             if (!originSet || IsProxy(eid)) return;
             bool grind = grindEnemies.Remove(eid);
+            // still here, or gone with its death (lastAt: its middle when last seen)
+            var mid = eid != null ? EnemyBounds(eid).center : lastAt;
             var nm = MonoSingleton<NewMovement>.Instance;
-            if (!grind && nm != null && Vector3.Distance(nm.transform.position, eid.transform.position) > 80f * K) return;
-            var b = EnemyBounds(eid);
-            var at = UkToMc(b.center);
+            if (!grind && nm != null && Vector3.Distance(nm.transform.position, mid) > 80f * K) return;
+            var at = UkToMc(mid);
             int rank = 0;
             try { rank = MonoSingleton<StyleHUD>.Instance != null ? MonoSingleton<StyleHUD>.Instance.rankIndex : 0; } catch { }
             Net.Send("UKDEAD " + eid.enemyType + " " + S(at.x) + " " + S(at.y) + " " + S(at.z) + " " + rank + " " + (grind ? 1 : 0));
@@ -1640,6 +1726,18 @@ namespace UltraBridge
             var t = new Gradient { mode = g.mode };
             t.SetKeys(keys, g.alphaKeys);
             return t;
+        }
+    }
+
+    /// <summary>Debug (LEAN): the camera held leaning, as when V1 strafes, to line Minecraft's world up against.</summary>
+    [HarmonyPatch(typeof(CameraController), nameof(CameraController.ApplyRotations))]
+    static class DebugLean
+    {
+        public static float degrees;
+
+        static void Postfix(CameraController __instance)
+        {
+            if (degrees != 0f) __instance.transform.localRotation *= Quaternion.AngleAxis(degrees, Vector3.forward);
         }
     }
 }

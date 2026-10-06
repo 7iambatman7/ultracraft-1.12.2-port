@@ -410,6 +410,8 @@ public final class ServerOps {
 				UkSpawns.died(sp, level, a[1], at, rank);
 				if (a.length > 6 && a[6].equals("1")) CyberGrind.died(sp);
 			}
+			// GRINDGONE: one of the wave's enemies never came, or fell out of the world: the wave doesn't wait for it
+			case "GRINDGONE" -> CyberGrind.died(sp);
 			default -> {
 			}
 		}

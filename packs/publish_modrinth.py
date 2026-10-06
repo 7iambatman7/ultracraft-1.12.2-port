@@ -39,10 +39,10 @@ def call(method, path, body=None, files=None):
         parts = []
         if body is not None:
             parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="data"\r\nContent-Type: application/json\r\n\r\n'.encode() + json.dumps(body).encode() + b"\r\n")
-        for name, path in files.items():
-            ctype = mimetypes.guess_type(path)[0] or "application/java-archive"
-            parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; filename="{os.path.basename(path)}"\r\nContent-Type: {ctype}\r\n\r\n'.encode()
-                         + open(path, "rb").read() + b"\r\n")
+        for name, file in files.items():
+            ctype = mimetypes.guess_type(file)[0] or "application/java-archive"
+            parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; filename="{os.path.basename(file)}"\r\nContent-Type: {ctype}\r\n\r\n'.encode()
+                         + open(file, "rb").read() + b"\r\n")
         data = b"".join(parts) + f"--{boundary}--\r\n".encode()
         headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
     elif body is not None:
@@ -75,6 +75,9 @@ if project is None:
     print("created the draft project", project["id"], f"https://modrinth.com/mod/{SLUG}")
 else:
     print("project", project["id"], "status", project["status"])
+    # the page follows packs/modrinth/body.md
+    call("PATCH", f"/project/{project['id']}", {"body": open(os.path.join(ROOT, "packs", "modrinth", "body.md"), encoding="utf-8").read()})
+    print("page updated")
     if a.icon:
         ext = os.path.splitext(a.icon)[1].lstrip(".")
         req = urllib.request.Request(f"{API}/project/{project['id']}/icon?ext={ext}", data=open(a.icon, "rb").read(), method="PATCH",

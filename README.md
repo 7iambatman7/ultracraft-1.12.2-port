@@ -163,6 +163,11 @@ which way): **Leave** on its Cyber Grind page takes everyone back to where they 
 straight to an arena, `/uc grind stop` ends the run. With the setting off, the waves come round the shop you started
 from.
 
+## Made with AI
+
+Ultracraft was coded with **Claude** (Anthropic's AI) through Claude Code: the Fabric mod, the ULTRAKILL plugin, the
+tests and this guide were written by Claude, directed, played and tested by a person.
+
 ## Build from source
 
 - Fabric mod: JDK 21, `cd fabric && ./gradlew build` → `fabric/build/1.21.11/libs/` (`-Pmc=1.20.1` for the 1.20.1 build, in progress).

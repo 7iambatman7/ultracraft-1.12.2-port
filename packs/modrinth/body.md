@@ -22,6 +22,9 @@ The **Ultracraft modpack** sets up a full instance in one go: Ultracraft, Fabric
 ## Performance
 Two games share your graphics card. Settings → Ultracraft → Performance has a **Low-End PC Preset**, ULTRAKILL's resolution (down to 360p), effects quality, blood stains, extra gore and terrain range. Sodium and Iris work with Ultracraft.
 
+## Made with AI
+Ultracraft was coded with **Claude** (Anthropic's AI) through Claude Code: the Fabric mod, the ULTRAKILL plugin, the tests and these pages were written by Claude, directed, played and tested by a person.
+
 ## Links
 Source, issues and the full guide: https://github.com/alfr0762/ultracraft
 

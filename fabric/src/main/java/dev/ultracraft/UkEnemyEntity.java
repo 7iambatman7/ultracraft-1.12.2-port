@@ -143,7 +143,8 @@ public class UkEnemyEntity extends PathfinderMob implements Enemy {
 			invulnerableTime = 20;
 		}
 		hurtBefore = amount;
-		String by = attacker == null ? "-1" : UcNet.isV1(attacker) ? "V1" : Integer.toString(attacker.getId());
+		// (another player's V1: which one, so the enemy can turn on them)
+		String by = attacker == null ? "-1" : UcNet.isV1(attacker) ? (attacker.getUUID().equals(owner) ? "V1" : "V1:" + attacker.getId()) : Integer.toString(attacker.getId());
 		if (owner != null && level.getServer() != null) {
 			var sp = level.getServer().getPlayerList().getPlayer(owner);
 			if (sp != null) UcNet.send(sp, "EHURT " + ukId + " " + dealt + " " + by + (fire ? " fire" : ""));

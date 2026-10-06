@@ -192,7 +192,9 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 			slider("Impact Frames", "How long ULTRAKILL's impact frames (the freeze on big hits) last: 0.1x to 3x.", 1, 30, Math.round(UltracraftConfig.impactFrames * 10f),
 				v -> String.format(Locale.ROOT, "%.1fx", v / 10f), v -> UltracraftConfig.impactFrames = v / 10f),
 			bool("Start ULTRAKILL", "Starting Minecraft starts ULTRAKILL too (through Steam), and closing Minecraft closes it.", UltracraftConfig.launchUltrakill,
-				v -> UltracraftConfig.launchUltrakill = v));
+				v -> UltracraftConfig.launchUltrakill = v),
+			bool("Teammate Markers", "In multiplayer: the other players' names, health and distance over their heads, seen through walls, and at the screen's edge when they're off it.",
+				UltracraftConfig.teammateMarkers, v -> UltracraftConfig.teammateMarkers = v));
 	}
 
 	private static void shop(Category c) {

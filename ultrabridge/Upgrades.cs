@@ -1,6 +1,6 @@
 // UltraBridge, part five: what the shop's upgrades do (Minecraft keeps the levels and sells them: UPGRADES, UPBUY).
 //
-// Every weapon and each arm has its own Power (60% at first, 300% fully upgraded, 1500% with the OP Shop: damage to
+// Every weapon and each arm has its own Power (40% at first, so a zombie takes two headshots; 300% fully upgraded, 1500% with the OP Shop: damage to
 // enemies, Minecraft's mobs and blocks) and upgrades of its own (blast sizes go to 1500% with the OP Shop too):
 // - Revolver: Hair Trigger (fires and charges faster), Capacitor (coins and specials recharge faster)
 // - Shotgun: Payload (bigger core and overpump blasts), Capacitor (cores, saws and the Jackhammer recharge faster)
@@ -51,7 +51,7 @@ namespace UltraBridge
         };
 
         // levels past 11 (Power) and 5 (blast sizes) are the OP Shop's
-        static readonly float[] PowerTable = { 0.6f, 0.8f, 1f, 1.2f, 1.4f, 1.6f, 1.8f, 2f, 2.3f, 2.6f, 3f, 4f, 5f, 6f, 7f, 8f, 9f, 10f, 11f, 12f, 13f, 14f, 15f };
+        static readonly float[] PowerTable = { 0.4f, 0.6f, 0.8f, 1f, 1.2f, 1.45f, 1.7f, 2f, 2.3f, 2.6f, 3f, 4f, 5f, 6f, 7f, 8f, 9f, 10f, 11f, 12f, 13f, 14f, 15f };
         static readonly float[] RateTable = { 1f, 1.25f, 1.5f, 1.8f, 2.2f };
         static readonly float[] SizeTable = { 1f, 1.2f, 1.4f, 1.65f, 2f, 3f, 4f, 5f, 6f, 8f, 10f, 12f, 15f };
         static readonly float[] ReflexTable = { 0f, 0.08f, 0.16f, 0.25f, 0.35f };
@@ -80,12 +80,12 @@ namespace UltraBridge
             return table[Mathf.Clamp(level - 1, 0, table.Length - 1)];
         }
 
-        /// <summary>How hard a weapon or arm hits (rev, sho, nai, rai, rock, arm0, arm1, arm2): 0.6 to 3.</summary>
+        /// <summary>How hard a weapon or arm hits (rev, sho, nai, rai, rock, arm0, arm1, arm2): 0.4 to 3.</summary>
         public static float Power(string group) => group == null ? 1f : At(PowerTable, group + ".power");
 
-        /// <summary>Power against blocks: it counts for more there (x0.46 at first, x5.2 at 300%), so an upgraded
-        /// weapon or arm digs visibly faster.</summary>
-        public static float BlockPower(string group) => Mathf.Pow(Power(group), 1.5f);
+        /// <summary>Power against blocks: it counts for more there (x0.46 at first, x5.2 at 300%), so an upgraded weapon or
+        /// arm digs visibly faster. The weaker start (40%) is for fights, not digging: blocks go as they did at 60%.</summary>
+        public static float BlockPower(string group) => Mathf.Pow(Mathf.Max(0.6f, Power(group)), 1.5f);
 
         /// <summary>The same, by the name the damage code knows a weapon by.</summary>
         public static float UpgradeMult(string kind) => Power(kind);

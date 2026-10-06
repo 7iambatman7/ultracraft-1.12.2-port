@@ -1324,7 +1324,7 @@ namespace UltraBridge
         }
     }
 
-    /// <summary>Upgrades: V1's weapons, punches and hook hit as hard as their Power says (60% at first, up to 300%),
+    /// <summary>Upgrades: V1's weapons, punches and hook hit as hard as their Power says (40% at first, up to 300%),
     /// against ULTRAKILL's enemies and Minecraft's mobs alike. Runs before the mob stand-ins' own damage handling.</summary>
     [HarmonyPatch(typeof(EnemyIdentifier), nameof(EnemyIdentifier.DeliverDamage))]
     static class UpgradedDamage

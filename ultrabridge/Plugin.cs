@@ -89,6 +89,8 @@ namespace UltraBridge
         public readonly CancellationTokenSource life = new CancellationTokenSource();
         // another player who is V1 ("v1"): which way they face (Minecraft's yaw), and V1's body standing for them
         public float yaw;
+        // on fire in Minecraft: ULTRAKILL's own fire on it (Minecraft's flames aren't drawn over V1's view)
+        public GameObject fire;
         public Transform v1Body;
         public Animator v1Anim;
         // how that player's own ULTRAKILL has their V1 (RV1): on the ground, sliding, looking up or down, the gun out
@@ -717,13 +719,15 @@ namespace UltraBridge
                 }
                 case "EHURT":
                 {
-                    // EHURT <ULTRAKILL enemy id> <Minecraft damage> <attacker: mob id, V1 or -1> [fire]: something in
-                    // Minecraft hurt one of ULTRAKILL's enemies (a mob, V1's Minecraft weapon, lava, fire, cactus...)
+                    // EHURT <ULTRAKILL enemy id> <Minecraft damage> <attacker: mob id, V1, V1:<teammate's id> or -1> [fire]:
+                    // something in Minecraft hurt one of ULTRAKILL's enemies (a mob, a V1's Minecraft weapon, lava,
+                    // fire, cactus...)
                     var a = rest.Split(' ');
                     if (!levelPrepared) break;
                     string by = a.Length > 2 ? a[2] : "-1";
                     int mobId = int.TryParse(by, out var m) ? m : -1;
-                    EnemyHurtByMob(int.Parse(a[0]), F(a[1]), mobId, by == "V1", a.Length > 3 ? a[3] : null);
+                    int mate = by.StartsWith("V1:") && int.TryParse(by.Substring(3), out var mm) ? mm : 0;
+                    EnemyHurtByMob(int.Parse(a[0]), F(a[1]), mobId, by == "V1" || mate != 0, a.Length > 3 ? a[3] : null, mate);
                     break;
                 }
                 case "FLUID":
@@ -828,6 +832,19 @@ namespace UltraBridge
                     else nm.GetHurt(Mathf.Max(1, Mathf.RoundToInt(F(a[0]))), true);
                     break;
                 }
+                case "FULLHEAL":
+                {
+                    // FULLHEAL: V1 whole again (a duel starting or over)
+                    var fnm = levelPrepared ? MonoSingleton<NewMovement>.Instance : null;
+                    if (fnm == null || fnm.dead) break;
+                    fnm.ResetHardDamage();
+                    fnm.FullHeal(true);
+                    break;
+                }
+                case "DUEL":
+                    // DUEL id | DUEL -: our shots hurt that player's V1 (a duel), or nobody's again
+                    duelWith = rest.Trim() == "-" ? int.MinValue : int.Parse(rest.Trim());
+                    break;
                 case "RESPAWN":
                 {
                     var nm = levelPrepared ? MonoSingleton<NewMovement>.Instance : null;
@@ -2198,8 +2215,8 @@ namespace UltraBridge
             foreach (var eid in ukEnemies.Values)
             {
                 if (eid == null || eid.dead || eid.IgnorePlayer && !eid.AttackEnemies) continue;
-                // a boss came for V1 and nothing else
-                if (IsBossEid(eid)) continue;
+                // a boss came for the V1s and nothing else (AimBosses); with ours down, the others go for teammates there too
+                if (IsBossEid(eid) || AimOf(eid) > 0) continue;
                 var pos = eid.transform.position;
                 McProxy best = null;
                 float bestD = 80f * 80f;
@@ -2262,7 +2279,7 @@ namespace UltraBridge
 
         /// <summary>A mob's hit (bite, arrow, blast) on one of ULTRAKILL's enemies: real ULTRAKILL damage (its own blood
         /// and death), and the enemy turns on that mob unless V1 has its attention.</summary>
-        void EnemyHurtByMob(int ukId, float mcDamage, int mobId, bool byV1 = false, string kind = null)
+        void EnemyHurtByMob(int ukId, float mcDamage, int mobId, bool byV1 = false, string kind = null, int mate = 0)
         {
             if (!ukEnemies.TryGetValue(ukId, out var eid) || eid == null || eid.dead) return;
             var b = EnemyBounds(eid);
@@ -2272,7 +2289,9 @@ namespace UltraBridge
             eid.DeliverDamage(limb != null ? limb.gameObject : eid.gameObject, Vector3.zero, b.center, mcDamage / 10f, false, 0f, null);
             if (byV1)
             {
-                MarkV1Attack(eid);
+                // ours, or a teammate's (it counts towards whom the enemy goes for)
+                if (mate != 0) AddThreat(eid, mate, mcDamage / 10f);
+                else MarkV1Attack(eid);
                 return;
             }
             if (!eid.dead && !V1Aggro(eid) && proxies.TryGetValue(mobId, out var p) && p != null && p.eid != null)
@@ -2920,7 +2939,7 @@ namespace UltraBridge
         void ApplyEntities(string rest)
         {
             if (!levelPrepared || !originSet) return;
-            // id,type,x,y,z,w,h,eye,hp,maxhp,hostile;...
+            // id,type,x,y,z,w,h,eye,hp,maxhp,hostile,yaw,burning;...
             var seen = new HashSet<int>();
             foreach (var entry in rest.Split(';'))
             {
@@ -2935,6 +2954,7 @@ namespace UltraBridge
                 {
                     // the same entity as something else now: a player who became V1 (V1's body, not a hidden box) or
                     // went back to Steve. Made anew; kept as it was, a player who joined as Steve never showed as V1.
+                    ProxyFire(p, false);
                     if (p.eid != null)
                     {
                         p.eid.dead = true;
@@ -2959,6 +2979,7 @@ namespace UltraBridge
                 p.hostile = a.Length > 10 && a[10] == "1";
                 if (a.Length > 11) p.yaw = F(a[11]);
                 if (p.eid != null) p.eid.health = hp / 10f;
+                ProxyFire(p, a.Length > 12 && a[12] == "1");
             }
             var gone = new List<int>();
             // (negative ids: debug stand-ins of our own, not Minecraft's)
@@ -2969,6 +2990,7 @@ namespace UltraBridge
                 proxies.Remove(id);
                 if (p != null)
                 {
+                    ProxyFire(p, false);
                     if (p.eid != null)
                     {
                         p.eid.dead = true;
@@ -3577,12 +3599,17 @@ namespace UltraBridge
                 // another player's enemy (its puppet here): the hit goes to the real one, in their game
                 var pup = __instance.GetComponentInParent<UkPuppet>();
                 if (pup != null) return Bridge.I == null || Bridge.I.PuppetHit(pup, __instance, target, hitPoint, multiplier, critMultiplier, fromExplosion);
-                // V1 shot one of ULTRAKILL's own enemies: it stops chasing Minecraft mobs for a while
-                if (sourceWeapon != null) Bridge.I?.MarkV1Attack(__instance);
+                // V1 shot one of ULTRAKILL's own enemies: it stops chasing Minecraft mobs for a while (and, with
+                // teammates about, it counts towards whom it goes for)
+                if (sourceWeapon != null)
+                {
+                    Bridge.I?.MarkV1Attack(__instance);
+                    Bridge.I?.AddThreat(__instance, 0, multiplier);
+                }
                 return true;
             }
-            // a teammate (another player's V1): our enemies hurt them, we don't
-            if (p.type == "v1" && __instance.hitter != "enemy") return false;
+            // a teammate (another player's V1): our enemies hurt them, we don't, unless we're dueling them (DUEL)
+            if (p.type == "v1" && __instance.hitter != "enemy" && (Bridge.I == null || Bridge.I.duelWith != p.id)) return false;
             bool head = target != null && target == p.head;
             float dmg = multiplier;
             if (head) dmg *= critMultiplier > 0f ? 1f + critMultiplier : 2f;
@@ -3624,6 +3651,23 @@ namespace UltraBridge
             if (hitPoint != Vector3.zero) at = hitPoint;
             Bridge.SpawnGore(__instance, type, at, fromExplosion, hp);
             return false;
+        }
+    }
+
+    /// <summary>With teammates about, an enemy going for one of them doesn't snap back to our V1 the moment we hit it
+    /// (ULTRAKILL's own rule): Bridge.AimBosses weighs the hit and decides.</summary>
+    [HarmonyPatch(typeof(EnemyIdentifier), nameof(EnemyIdentifier.DeliverDamage))]
+    [HarmonyPriority(Priority.Last)]
+    static class EidDamageKeepsAim
+    {
+        static void Prefix(EnemyIdentifier __instance, out EnemyTarget __state) => __state = __instance.target;
+
+        static void Postfix(EnemyIdentifier __instance, EnemyTarget __state)
+        {
+            if (Bridge.I == null || __state == null || __instance.dead || Bridge.I.AimOf(__instance) <= 0) return;
+            if (__instance.target == __state) return;
+            __instance.target = __state;
+            __instance.prioritizeEnemiesUnlessAttacked = true;
         }
     }
 

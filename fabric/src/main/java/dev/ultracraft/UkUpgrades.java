@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * Everything the shop's Upgrades page sells. Every weapon and each arm has its own Power (how hard it hits enemies,
- * mobs and blocks: 60% at first, 300% fully upgraded) and upgrades of its own: two for each weapon, six for each arm.
+ * mobs and blocks: 40% at first, 300% fully upgraded) and upgrades of its own: two for each weapon, six for each arm.
  * With the OP Shop on (settings), Power goes on to 1500% and every blast size upgrade to 1500%. ULTRAKILL's side knows
  * what each level does (bridge Upgrades.cs); here is what each costs and how far it goes, and the one effect Minecraft
  * applies itself (parried projectiles).

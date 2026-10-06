@@ -5,7 +5,8 @@
 // - PUPS id,key,x,y,z,yaw,anim,dead,w,h;...: another player's enemies near us (id: its Minecraft stand-in). Each is the
 //   real enemy with its own brain off, moved and animated as its owner's is. Our shots hurt it for real: the hit goes
 //   to its owner's ULTRAKILL (PHIT), where the enemy actually lives; here it bleeds (and heals us) like any enemy.
-// - EHIT id damage head explosion: another player hit one of our enemies (through its puppet in their game).
+// - EHIT id damage head explosion by: another player (by: their Minecraft id) hit one of our enemies (through its
+//   puppet in their game).
 // - Other players who are V1 come in ENTS as "v1": V1's own body stands there, and our enemies go for them as for us
 //   (their hits go through Minecraft to that player's ULTRAKILL). Our shots stop at a teammate but don't hurt them.
 
@@ -35,6 +36,8 @@ namespace UltraBridge
     public partial class Bridge
     {
         readonly Dictionary<int, UkPuppet> puppets = new Dictionary<int, UkPuppet>();
+        /// <summary>The other V1 we're dueling (their Minecraft id): our shots hurt them (Minecraft's Duels).</summary>
+        internal int duelWith = int.MinValue;
 
         static bool IsPuppet(EnemyIdentifier eid) => eid != null && eid.GetComponentInParent<UkPuppet>() != null;
 
@@ -86,7 +89,7 @@ namespace UltraBridge
                     break;
                 case "EHIT":
                 {
-                    // EHIT id damage head explosion: another player's shot, through this enemy's puppet in their game
+                    // EHIT id damage head explosion [by]: another player's shot, through this enemy's puppet in their game
                     var a = rest.Split(' ');
                     if (a.Length < 2 || !levelPrepared) break;
                     if (!ukEnemies.TryGetValue(int.Parse(a[0]), out var eid) || eid == null || eid.dead) break;
@@ -97,6 +100,8 @@ namespace UltraBridge
                     {
                         eid.hitter = blast ? "explosion" : "revolver";
                         eid.DeliverDamage(target, Vector3.zero, target.transform.position, F(a[1]), false, head ? 1f : 0f, null, false, blast);
+                        // who did it (their Minecraft id): it counts towards whom the enemy goes for
+                        if (a.Length > 4) AddThreat(eid, int.Parse(a[4]), F(a[1]));
                     }
                     catch (Exception e) { Plugin.Log.LogDebug("EHIT: " + e.Message); }
                     break;

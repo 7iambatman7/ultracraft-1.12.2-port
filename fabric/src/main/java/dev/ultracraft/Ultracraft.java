@@ -196,7 +196,11 @@ public final class Ultracraft implements ClientModInitializer {
 				}
 			});
 		}
-		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, Identifier.fromNamespaceAndPath("ultracraft", "v1"), (ctx, t) -> renderV1(ctx));
+		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, Identifier.fromNamespaceAndPath("ultracraft", "v1"), (ctx, t) -> {
+			renderV1(ctx);
+			Teammates.render(Minecraft.getInstance(), ctx, t.getGameTimeDeltaPartialTick(false));
+			Spectate.render(Minecraft.getInstance(), ctx);
+		});
 	}
 
 	/** A weapon's own key: with Minecraft's items out, the guns come back for it. */
@@ -502,6 +506,7 @@ public final class Ultracraft implements ClientModInitializer {
 			}
 		}
 		if (steveView && !active && UkLink.connected) {
+			Spectate.tick(mc);
 			steveTick(mc, p);
 			return;
 		}
@@ -627,12 +632,28 @@ public final class Ultracraft implements ClientModInitializer {
 		}
 	}
 
+	/** In a duel (Duels): whose V1 our shots hurt, or -1. */
+	static int duelWith = -1;
+
+	/** C:DUEL id | C:DUEL -: a duel began against that player, or it's over (a V1 that died in it gets up again). */
+	private static void duel(Minecraft mc, String rest) {
+		boolean on = !rest.equals("-");
+		duelWith = on ? Integer.parseInt(rest) : -1;
+		UkLink.send("DUEL " + rest);
+		if (!on && mc.player != null) {
+			if (UkLink.dead) UkLink.send("RESPAWN");
+			UkLink.send("FULLHEAL");
+			if (active) teleportV1(mc.player);
+		}
+	}
+
 	/** Down in a boss fight (BossParty): watching a teammate, with ULTRAKILL drawing the fight from that view. */
-	static boolean downed;
+	public static boolean downed;
 
 	static void setDowned(Minecraft mc, boolean on, boolean dead) {
 		if (on == downed) return;
 		downed = on;
+		if (!on) Spectate.reset();
 		if (on) {
 			setUiMode(mc, false);
 			setFrozen(mc, false);
@@ -800,6 +821,10 @@ public final class Ultracraft implements ClientModInitializer {
 	static void fromServer(String msg) {
 		if (msg.startsWith("DOWNED ")) {
 			setDowned(Minecraft.getInstance(), msg.startsWith("DOWNED 1"), msg.endsWith("dead"));
+		} else if (msg.startsWith("WATCH ")) {
+			Spectate.watch(msg.substring(6));
+		} else if (msg.startsWith("DUEL ")) {
+			duel(Minecraft.getInstance(), msg.substring(5).trim());
 		} else if (msg.startsWith("V1S ")) {
 			UcNet.clientV1s(msg.substring(4));
 		} else if (msg.startsWith("PGAIN ")) {
@@ -910,16 +935,18 @@ public final class Ultracraft implements ClientModInitializer {
 				continue;
 			}
 			// ULTRAKILL's own enemies' stand-ins are ULTRAKILL's already
-			if (e == self || !(e instanceof LivingEntity le) || !le.isAlive() || e instanceof UkEnemyEntity) continue;
-			if (e.distanceToSqr(self) > 80 * 80) continue;
-			// another player who is V1: ULTRAKILL draws V1's body there, and its enemies go for them as for us
+			if (e == self || !(e instanceof LivingEntity le) || !le.isAlive() || e instanceof UkEnemyEntity || e.isSpectator()) continue;
+			// another player who is V1: ULTRAKILL draws V1's body there, and its enemies go for them as for us (a
+			// teammate who is down in a boss fight watches as a spectator: not there, and nobody's target)
 			boolean v1 = UcNet.isV1(e);
+			if (e.distanceToSqr(self) > (v1 ? 160 * 160 : 80 * 80)) continue;
 			String type = v1 ? "v1" : BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath();
 			// hostile mobs (and other V1s) are what ULTRAKILL's enemies go for
 			int hostile = e instanceof Enemy || v1 ? 1 : 0;
-			sb.append(String.format(Locale.ROOT, "%d,%s,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%d,%.1f;",
+			// on fire: ULTRAKILL's own fire burns on it (EntityMixin keeps Minecraft's flames off it meanwhile)
+			sb.append(String.format(Locale.ROOT, "%d,%s,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%d,%.1f,%d;",
 				e.getId(), type, e.getX(), e.getY(), e.getZ(), e.getBbWidth(), e.getBbHeight(), e.getEyeHeight(), le.getHealth(), le.getMaxHealth(), hostile,
-				v1 ? e.getYHeadRot() : e.getYRot()));
+				v1 ? e.getYHeadRot() : e.getYRot(), e.isOnFire() ? 1 : 0));
 		}
 		UkLink.send(sb.toString());
 	}

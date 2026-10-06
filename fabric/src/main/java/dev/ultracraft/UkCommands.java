@@ -13,6 +13,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -30,6 +31,8 @@ import net.minecraft.server.level.ServerPlayer;
  * /uc boss kill|leave|list|status
  * /uc boss timer &lt;minutes&gt;      the next boss after that much play
  * /uc bosses on|off
+ * /uc grind start|arena &lt;n&gt;|stop
+ * /uc duel &lt;player&gt;|accept|decline|forfeit   PvP with another V1
  * </pre>
  */
 final class UkCommands {
@@ -164,6 +167,16 @@ final class UkCommands {
 			.then(Commands.literal("bosses")
 				.then(Commands.literal("on").executes(c -> bosses(c, true)))
 				.then(Commands.literal("off").executes(c -> bosses(c, false))))
+			// PvP: challenge another V1 (Duels), answer a challenge, or give up
+			.then(Commands.literal("duel")
+				.then(Commands.literal("accept").executes(c -> duelAnswer(c, true)))
+				.then(Commands.literal("decline").executes(c -> duelAnswer(c, false)))
+				.then(Commands.literal("forfeit").executes(c -> Duels.forfeit(player(c)) ? 1 : fail(c, "You're not in a duel.")))
+				.then(Commands.argument("player", EntityArgument.player()).executes(c -> {
+					ServerPlayer to = EntityArgument.getPlayer(c, "player");
+					String why = Duels.challenge(player(c), to);
+					return why != null ? fail(c, why) : say(c, "You challenged " + to.getName().getString() + " to a duel.");
+				})))
 			// the Cyber Grind's arenas: a run from a random one or straight to one (its waves start as usual), or out of them
 			.then(Commands.literal("grind")
 				.then(Commands.literal("start").executes(c -> {
@@ -187,9 +200,14 @@ final class UkCommands {
 		d.register(Commands.literal("ultracraft").executes(c -> help(c)).redirect(node));
 	}
 
+	private static int duelAnswer(CommandContext<CommandSourceStack> c, boolean yes) throws CommandSyntaxException {
+		String why = Duels.answer(player(c), yes);
+		return why != null ? fail(c, why) : yes ? 1 : say(c, "Duel declined.");
+	}
+
 	private static int help(CommandContext<CommandSourceStack> c) {
 		return say(c, "/uc p [add|take|set <amount>]\n/uc weapons all|none|list|give <gear>|take <gear>\n/uc upgrades max|reset|list|set <upgrade> <level>\n/uc settings"
-			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind start|arena <1-50>|stop");
+			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind start|arena <1-50>|stop\n/uc duel <player>|accept|decline|forfeit");
 	}
 
 	private static ServerPlayer player(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {

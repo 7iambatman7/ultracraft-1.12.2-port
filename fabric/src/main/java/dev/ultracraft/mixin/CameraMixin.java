@@ -55,7 +55,14 @@ public abstract class CameraMixin {
 			// Steve with ULTRAKILL's enemies about: ULTRAKILL draws from where Minecraft's camera would be, and Minecraft
 			// draws its world from the view of the frame ULTRAKILL drew, so the two never slide apart
 			Ultracraft.steveDrawn = false;
-			if (detached) return;
+			// down in a boss fight: round the teammate we're watching, as the mouse turns it (Spectate)
+			double[] orbit = dev.ultracraft.Spectate.pose(net.minecraft.client.Minecraft.getInstance(), partial);
+			if (orbit != null) {
+				setRotation((float) orbit[3], (float) orbit[4]);
+				setPosition(orbit[0], orbit[1], orbit[2]);
+			} else if (detached) {
+				return;
+			}
 			Vec3 at = ((Camera) (Object) this).position();
 			UkLink.send(String.format(java.util.Locale.ROOT, "STEVECAM %.4f %.4f %.4f %.3f %.3f %.2f", at.x, at.y, at.z,
 				((Camera) (Object) this).yRot(), ((Camera) (Object) this).xRot(), Ultracraft.steveFov));

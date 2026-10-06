@@ -61,6 +61,11 @@ public final class UcNet {
 		PayloadTypeRegistry.playS2C().registerLarge(ToClient.TYPE, ToClient.CODEC, 1 << 20);
 		ServerPlayNetworking.registerGlobalReceiver(ToServer.TYPE, (payload, ctx) -> ServerOps.handle(ctx.player(), payload.msg()));
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> server.execute(() -> ServerOps.left(handler.player)));
+		// back in after leaving mid-fight or mid-run (or the world closing): not stuck as a spectator or in the void
+		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> server.execute(() -> {
+			BossParty.joined(handler.player);
+			CyberGrind.joined(handler.player);
+		}));
 	}
 
 	/** The client half (from the client initializer). */

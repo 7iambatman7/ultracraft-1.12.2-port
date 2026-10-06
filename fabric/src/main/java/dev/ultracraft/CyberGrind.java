@@ -425,6 +425,23 @@ final class CyberGrind {
 		runner = null;
 	}
 
+	/**
+	 * A player joining in the Grind's arenas with no run of theirs going on there (they left mid-run, or the world
+	 * closed): out to the world's spawn, not left in an empty arena over the void.
+	 */
+	static void joined(ServerPlayer sp) {
+		if (sp.level().dimension() != GrindArenas.DIMENSION) return;
+		if (running && arenaMode && party.containsKey(sp.getUUID())) return;
+		var server = sp.level().getServer();
+		var spawn = server.getRespawnData();
+		ServerLevel to = server.getLevel(spawn.globalPos().dimension());
+		if (to == null) to = server.overworld();
+		var pos = spawn.globalPos().pos();
+		int y = to.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, pos.getX(), pos.getZ());
+		sp.teleportTo(to, pos.getX() + 0.5, Math.max(y, pos.getY()), pos.getZ() + 0.5, Set.of(), spawn.yaw(), 0f, true);
+		sp.fallDistance = 0;
+	}
+
 	/** Back out of the arenas: the temporary shop goes, and everyone still in there goes back where they came from. */
 	private static void leaveArenas() {
 		arenaMode = false;

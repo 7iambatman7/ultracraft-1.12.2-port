@@ -115,6 +115,12 @@ final class UkBosses {
 	private static Runnable arenaWin;
 	/** The player it's coming for (in multiplayer the others can join in: they see it, and share the prize). */
 	private static java.util.UUID target;
+	/**
+	 * Its health for everyone else: the boss lives in its target's ULTRAKILL, and the others' copies of it (puppets)
+	 * have no health bar of their own, so they get Minecraft's boss bar (as does the target while down and watching).
+	 */
+	private static net.minecraft.server.level.ServerBossEvent bar;
+	private static float barMax;
 
 	/** The player a boss is coming for, or null. */
 	static ServerPlayer target(net.minecraft.server.MinecraftServer server) {
@@ -159,7 +165,7 @@ final class UkBosses {
 	}
 
 	private static boolean calm(ServerPlayer sp) {
-		return sp.isAlive() && !sp.isSleeping() && !sp.isPassenger() && !sp.isFallFlying() && !CyberGrind.running;
+		return sp.isAlive() && !sp.isSleeping() && !sp.isPassenger() && !sp.isFallFlying() && !CyberGrind.running && !Duels.inDuel(sp);
 	}
 
 	private static void idle(ServerPlayer sp, boolean playing) {
@@ -431,12 +437,28 @@ final class UkBosses {
 		}
 		stormIn = 60;
 		strikeAt = null;
+		if (bar != null) bar.removeAllPlayers();
+		bar = new net.minecraft.server.level.ServerBossEvent(Component.literal(boss.name).withStyle(ChatFormatting.RED),
+			net.minecraft.world.BossEvent.BossBarColor.RED, net.minecraft.world.BossEvent.BossBarOverlay.NOTCHED_10);
+		barMax = 0f;
+	}
+
+	/** Who sees the boss bar: every other player near the fight, and its target while down. */
+	private static void updateBar(ServerPlayer sp) {
+		if (bar == null || bossAt == null) return;
+		for (ServerPlayer o : sp.level().getServer().getPlayerList().getPlayers()) {
+			boolean see = (!isTarget(o) || BossParty.isDown(o)) && o.level() == sp.level() && o.position().distanceTo(bossAt) < 128.0;
+			if (see && !bar.getPlayers().contains(o)) bar.addPlayer(o);
+			else if (!see && bar.getPlayers().contains(o)) bar.removePlayer(o);
+		}
 	}
 
 	/** The fight is over (won, lost, left): the sun comes back. */
 	private static void endEffects() {
 		// whoever went down in it gets back up
 		BossParty.reviveAll();
+		if (bar != null) bar.removeAllPlayers();
+		bar = null;
 		if (themeFor != null) UcNet.send(themeFor, "C:THEME -");
 		themeFor = null;
 		arenaLayer = null;
@@ -477,6 +499,7 @@ final class UkBosses {
 
 	private static void fight(ServerPlayer sp) {
 		fightTicks += 10;
+		updateBar(sp);
 		if (has("stormcaller")) storm(sp);
 		if (bossAt != null && sp.position().distanceTo(bossAt) > 96.0) farTicks += 10;
 		else farTicks = 0;
@@ -485,8 +508,14 @@ final class UkBosses {
 	}
 
 	/** BOSSPOS id x y z health, from the target's ULTRAKILL. */
-	static void moved(ServerPlayer sp, int id, Vec3 at) {
-		if (phase == Phase.FIGHT && id == fightId && isTarget(sp)) bossAt = at;
+	static void moved(ServerPlayer sp, int id, Vec3 at, float health) {
+		if (phase != Phase.FIGHT || id != fightId || !isTarget(sp)) return;
+		bossAt = at;
+		if (bar != null && health >= 0f) {
+			// (its most yet: an Undying or Regenerating boss coming back above it fills the bar again)
+			barMax = Math.max(barMax, health);
+			bar.setProgress(barMax > 0f ? Math.min(1f, health / barMax) : 1f);
+		}
 	}
 
 	/** BOSSDEAD id x y z: beaten. P, experience, loot, and the next one later. */

@@ -333,44 +333,124 @@ namespace UltraBridge
         bool downed;
         float nextBossAim;
 
-        /// <summary>A boss here goes for whichever V1 is nearest and still standing: ours or a teammate (their V1's body
-        /// here; its hits reach them through Minecraft). With ours down, our other enemies go for the teammates too.</summary>
+        /// <summary>Who a boss here is after: 0 our V1, else a teammate (their Minecraft id), since when, and when it may
+        /// turn on someone else just because.</summary>
+        sealed class Aim { public int who = -1; public float since, nextShuffle; }
+        readonly Dictionary<int, Aim> aims = new Dictionary<int, Aim>();
+        // how much each V1 hurt each of our enemies lately (by enemy, then 0 for us or the teammate's Minecraft id)
+        readonly Dictionary<int, Dictionary<int, float>> threat = new Dictionary<int, Dictionary<int, float>>();
+        float nextThreatDecay;
+
+        /// <summary>A V1 hurt one of our enemies: it counts towards whom that enemy goes for.</summary>
+        public void AddThreat(EnemyIdentifier eid, int who, float damage)
+        {
+            if (eid == null || damage <= 0f || mpPeers <= 0) return;
+            int id = eid.GetInstanceID();
+            if (!threat.TryGetValue(id, out var t)) threat[id] = t = new Dictionary<int, float>();
+            t.TryGetValue(who, out var v);
+            t[who] = v + damage;
+        }
+
+        float ThreatOf(int enemy, int who) => threat.TryGetValue(enemy, out var t) && t.TryGetValue(who, out var v) ? v : 0f;
+
+        McProxy Mate(int id) => proxies.TryGetValue(id, out var p) && p != null && p.type == "v1" && p.eid != null ? p : null;
+
+        /// <summary>
+        /// Our bosses fight everyone, not just us: four times a second each one checks whom it's after. It goes for
+        /// whoever hurts it most lately and is near, holds on to them for a few seconds at least, and now and then turns
+        /// on someone else anyway. A V1 who is down (or dead, or Steve) is never its target; with ours down, every enemy
+        /// of ours goes for the teammates still standing.
+        /// </summary>
         void AimBosses(NewMovement nm)
         {
             if (Time.unscaledTime < nextBossAim) return;
-            nextBossAim = Time.unscaledTime + 1f;
+            nextBossAim = Time.unscaledTime + 0.25f;
+            float now = Time.time;
+            if (now >= nextThreatDecay)
+            {
+                // what they did a while ago counts for less and less
+                nextThreatDecay = now + 1f;
+                foreach (var t in threat.Values)
+                    foreach (var k in new List<int>(t.Keys)) t[k] *= 0.85f;
+            }
             bool usUp = nm != null && !nm.dead && !downed && !SteveView;
+            var mates = new List<McProxy>();
+            foreach (var p in proxies.Values) if (p != null && p.type == "v1" && p.eid != null && p.gameObject.activeInHierarchy) mates.Add(p);
             foreach (var kv in ukEnemies)
             {
                 var eid = kv.Value;
                 if (eid == null || eid.dead) continue;
                 bool boss = IsBossEid(eid);
-                if (!boss && usUp) continue;
+                if (!boss && usUp)
+                {
+                    // we're back up: Retarget has our ordinary enemies again (one still on a teammate stays there
+                    // only while the teammate is clearly nearer)
+                    aims.Remove(kv.Key);
+                    continue;
+                }
                 var pos = eid.transform.position;
-                McProxy best = null;
-                float bestD = float.MaxValue;
-                foreach (var p in proxies.Values)
+                if (!aims.TryGetValue(kv.Key, out var aim)) aims[kv.Key] = aim = new Aim { nextShuffle = now + UnityEngine.Random.Range(12f, 20f) };
+                // how much it wants each: who hurt it (damage, fading), and who's near
+                float Score(int who, Vector3 at) => ThreatOf(kv.Key, who) + 4f / (1f + (at - pos).magnitude / (K * 8f));
+                int best = -1;
+                float bestScore = float.MinValue, curScore = float.MinValue;
+                bool curOk = false;
+                if (usUp)
                 {
-                    if (p == null || p.type != "v1" || p.eid == null) continue;
-                    float d = (p.transform.position - pos).sqrMagnitude;
-                    if (d < bestD) { bestD = d; best = p; }
+                    float s0 = Score(0, nm.transform.position);
+                    if (aim.who == 0) { curOk = true; curScore = s0; }
+                    best = 0;
+                    bestScore = s0;
                 }
-                float dUs = usUp ? (nm.transform.position - pos).sqrMagnitude : float.MaxValue;
-                var cur = eid.target;
-                bool onMate = cur != null && cur.isEnemy && cur.enemyIdentifier != null && cur.enemyIdentifier.GetComponent<McProxy>() is McProxy cp && cp.type == "v1";
-                if (best != null && bestD < dUs * (onMate ? 1.5f : 0.7f))
+                foreach (var m in mates)
                 {
-                    if (onMate && cur.enemyIdentifier == best.eid) continue;
-                    eid.attackEnemies = true;
-                    eid.prioritizeEnemiesUnlessAttacked = false;
-                    eid.target = new EnemyTarget(best.eid);
+                    float s = Score(m.id, m.transform.position);
+                    if (aim.who == m.id) { curOk = true; curScore = s; }
+                    if (s > bestScore) { bestScore = s; best = m.id; }
                 }
-                else if (onMate && usUp)
+                if (best < 0) continue;
+                int pick = aim.who;
+                if (!curOk) pick = best;
+                else if (best != aim.who && now - aim.since > 4f && bestScore > curScore * 1.3f + 0.5f) pick = best;
+                else if (boss && now >= aim.nextShuffle && (mates.Count + (usUp ? 1 : 0)) > 1)
                 {
-                    TargetV1(eid);
+                    // now and then it turns on someone else anyway (bosses don't fixate on one V1)
+                    var others = new List<int>();
+                    if (usUp && aim.who != 0) others.Add(0);
+                    foreach (var m in mates) if (m.id != aim.who) others.Add(m.id);
+                    if (others.Count > 0) pick = others[UnityEngine.Random.Range(0, others.Count)];
                 }
+                if (boss && now >= aim.nextShuffle) aim.nextShuffle = now + UnityEngine.Random.Range(12f, 20f);
+                if (pick != aim.who)
+                {
+                    aim.who = pick;
+                    aim.since = now;
+                }
+                AimAt(eid, aim.who);
             }
+            if (aims.Count > ukEnemies.Count * 2 + 8)
+                foreach (var k in new List<int>(aims.Keys)) if (!ukEnemies.ContainsKey(k)) { aims.Remove(k); threat.Remove(k); }
         }
+
+        /// <summary>Point an enemy at V1 (0) or a teammate's V1 body, and keep it there: ULTRAKILL itself puts an enemy back
+        /// on the player unless it "prioritizes enemies" (EnemyIdentifier.UpdateTarget).</summary>
+        void AimAt(EnemyIdentifier eid, int who)
+        {
+            if (who == 0)
+            {
+                if (eid.target == null || !eid.target.isPlayer) TargetV1(eid);
+                return;
+            }
+            var m = Mate(who);
+            if (m == null) return;
+            eid.attackEnemies = true;
+            eid.prioritizeEnemiesUnlessAttacked = true;
+            if (eid.target == null || eid.target.enemyIdentifier != m.eid) eid.target = new EnemyTarget(m.eid);
+        }
+
+        /// <summary>An enemy's choice made in AimBosses, for a hit from our V1 not to snap it straight back to us (the
+        /// hit counts as threat instead).</summary>
+        internal int AimOf(EnemyIdentifier eid) => eid != null && mpPeers > 0 && aims.TryGetValue(eid.GetInstanceID(), out var a) ? a.who : -1;
 
         // ------------------------------------------------------------ what the others send
 

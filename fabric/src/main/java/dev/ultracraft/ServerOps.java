@@ -102,6 +102,7 @@ public final class ServerOps {
 		ticks++;
 		landFlung();
 		if (ticks % 10 == 0) guard("boss party", () -> BossParty.tick(server));
+		guard("duels", () -> Duels.tick(server));
 		for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
 			State s = state(sp);
 			// the Never Hungry cheat (as Steve too)
@@ -142,6 +143,7 @@ public final class ServerOps {
 		STATES.clear();
 		FLUNG.clear();
 		UcNet.clearServer();
+		Duels.reset();
 	}
 
 	/** Cheats are allowed for this player: in their own world (singleplayer, or the one they host), or as an operator. */
@@ -213,7 +215,8 @@ public final class ServerOps {
 			}
 			case "DEAD" -> {
 				// V1 died in ULTRAKILL: Minecraft's player dies too (respawn goes through Minecraft); in a boss fight
-				// with a teammate still standing, only down (BossParty)
+				// with a teammate still standing, only down (BossParty); in a duel, it's lost (and nobody dies)
+				if (Duels.lost(sp)) return;
 				if (BossParty.tryDown(sp)) return;
 				CyberGrind.stopIfRunner(sp, "V1 died");
 				UkBosses.stop(sp, "V1 died");
@@ -241,7 +244,7 @@ public final class ServerOps {
 				// ULTRAKILL): the real one, in its owner's ULTRAKILL, takes it
 				if (level.getEntity(Integer.parseInt(a[1])) instanceof UkEnemyEntity e && e.owner != null) {
 					ServerPlayer owner = server.getPlayerList().getPlayer(e.owner);
-					if (owner != null) UcNet.send(owner, "EHIT " + e.ukId + " " + a[2] + " " + a[3] + " " + a[4]);
+					if (owner != null) UcNet.send(owner, "EHIT " + e.ukId + " " + a[2] + " " + a[3] + " " + a[4] + " " + sp.getId());
 				}
 			}
 			case "SLAM" -> {
@@ -392,7 +395,10 @@ public final class ServerOps {
 				p.sendMoney();
 				p.sendUpgrades();
 			}
-			case "BOSSPOS" -> UkBosses.moved(sp, Integer.parseInt(a[1]), new Vec3(Double.parseDouble(a[2]), Double.parseDouble(a[3]), Double.parseDouble(a[4])));
+			case "BOSSPOS" -> UkBosses.moved(sp, Integer.parseInt(a[1]), new Vec3(Double.parseDouble(a[2]), Double.parseDouble(a[3]), Double.parseDouble(a[4])),
+				a.length > 5 ? Float.parseFloat(a[5]) : -1f);
+			// SPECTATE 1|-1: down in a boss fight, watch the next (or previous) teammate still standing
+			case "SPECTATE" -> BossParty.cycle(sp, Integer.parseInt(a[1]));
 			case "BOSSDEAD" -> UkBosses.beaten(sp, Integer.parseInt(a[1]), new Vec3(Double.parseDouble(a[2]), Double.parseDouble(a[3]), Double.parseDouble(a[4])));
 			case "BOSSGONE" -> UkBosses.gone(sp, Integer.parseInt(a[1]), a.length > 2 ? a[2] : "?");
 			case "GRIND" -> CyberGrind.toggle(sp, Long.parseLong(rest.trim()));
@@ -435,8 +441,14 @@ public final class ServerOps {
 		}
 		if (!(e instanceof LivingEntity le) || !le.isAlive()) return;
 		UkEnemyEntity enemy = by != 0 ? state(sp).enemies.get(by) : null;
-		// V1s don't hurt each other (their shots stop at a teammate); enemies do
-		if (enemy == null && UcNet.isV1(le)) return;
+		// V1s don't hurt each other (their shots stop at a teammate), unless they're dueling (Duels); enemies do
+		if (enemy == null && UcNet.isV1(le)) {
+			if (le instanceof ServerPlayer other && Duels.hits(sp, other)) {
+				le.invulnerableTime = 0;
+				le.hurtServer(level, explosion ? level.damageSources().explosion(sp, sp) : level.damageSources().playerAttack(sp), amount * 10f * Duels.DAMAGE);
+			}
+			return;
+		}
 		// ULTRAKILL has no invulnerability frames; 1 ULTRAKILL damage = 10 Minecraft health
 		le.invulnerableTime = 0;
 		var src = enemy != null && !enemy.isRemoved() ? level.damageSources().mobAttack(enemy)

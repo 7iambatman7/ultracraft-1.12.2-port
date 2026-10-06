@@ -124,8 +124,18 @@ You share the world and the fight: each player's ULTRAKILL runs the enemies arou
 them too. Other players show up as V1, holding the gun they have out, and you see and hear what they do: their beams,
 projectiles, explosions and shots. Each player has their own P, gear and upgrades.
 
-Bosses go after every V1 nearby. Die in a boss fight while a teammate fights on and you're only down: you watch them
-until the boss is beaten, then you're back on your feet beside them. Only when everyone is down does the boss leave.
+Over ULTRAKILL's view, each other player has their name, health and distance over their head, seen through walls, and
+at the screen's edge when they're off it (**Teammate Markers**, Gameplay settings).
+
+Bosses fight every V1 nearby: one goes for whoever hurts it most and is close, holds on to them for a few seconds, and
+now and then turns on someone else. Everyone but the player it came for sees its health in a boss bar. Die in a boss
+fight while a teammate fights on and you're only down: the camera follows a teammate (the mouse turns it round them,
+left and right click switch teammate) until the boss is beaten, then you're back on your feet beside them. Only when
+everyone is down does the boss leave.
+
+**Duels**: `/uc duel <player>` challenges another V1; they accept with a click in chat (or `/uc duel accept`). After a
+countdown your shots, punches and blasts hurt each other (half as hard as they'd hurt a mob). The first V1 down loses,
+nobody actually dies, and both get back up at full health. `/uc duel forfeit` gives up.
 
 ## Controls
 

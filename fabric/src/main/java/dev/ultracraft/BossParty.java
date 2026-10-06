@@ -293,6 +293,14 @@ final class BossParty {
 		}
 	}
 
+	/** This one gets up where they are (leaving the Grind run they went down in). */
+	static void standUp(ServerPlayer sp) {
+		Down d = downed.remove(sp.getUUID());
+		if (d == null) return;
+		stand(sp, d, sp.level(), sp.position(), sp.getYRot());
+		sendDowns();
+	}
+
 	/** The fight's over and somebody won it (the boss beaten or gone, a Grind wave cleared): everyone down gets up. */
 	static void reviveAll() {
 		if (downed.isEmpty() || server == null) return;

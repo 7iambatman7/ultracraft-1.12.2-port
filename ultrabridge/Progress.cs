@@ -243,6 +243,8 @@ namespace UltraBridge
                               .Append(" diff=").Append(alive ? part.eid.difficultyOverride : -1)
                               .Append(" hpx=").Append(alive ? S(part.eid.totalHealthModifier) : "-").Append(" spx=").Append(alive ? S(part.eid.totalSpeedModifier) : "-")
                               .Append(" dmgx=").Append(alive ? S(part.eid.totalDamageModifier) : "-").Append(" scale=").Append(alive ? S(part.go.transform.localScale.x) : "-")
+                              .Append(" aim=").Append(alive ? AimOf(part.eid) : -2)
+                              .Append(" tgt=").Append(!alive || part.eid.target == null ? "none" : part.eid.target.isPlayer ? "me" : part.eid.target.enemyIdentifier != null ? part.eid.target.enemyIdentifier.name : "other")
                               .Append(" at=").Append(alive ? UkToMc(part.eid.transform.position).ToString() : "-").Append(']');
                         }
                     }

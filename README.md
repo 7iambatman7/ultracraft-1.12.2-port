@@ -181,8 +181,8 @@ from.
 
 **Co-op**: anyone can join a run already going: **Join** on any shop's Cyber Grind page, or `/uc grind join`. The waves
 grow with every V1 fighting them. Go down and a teammate can bring you back (or you're up again when the wave is
-cleared); with everyone down the run is over and you all go back where you started, alive. Leave on a shop takes just
-you out, and if the player who started it leaves, the next one carries the run on.
+cleared); with everyone down the run is over and you all go back where you started, alive. Leave on a shop (or
+`/uc grind leave`) takes just you out, and if the player who started it leaves, the next one carries the run on.
 
 ## Made with AI
 

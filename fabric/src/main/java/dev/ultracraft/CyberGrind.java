@@ -181,7 +181,20 @@ final class CyberGrind {
 	}
 
 	/** Shop: a party member (not the runner) leaves on their own; the run goes on without them. */
+	/**
+	 * /uc grind leave: out of the run, back where they came from. The runner hands it on to someone still in it (or,
+	 * alone, ends it).
+	 */
+	static boolean leaveRun(ServerPlayer sp) {
+		if (!running || !arenaMode || !party.containsKey(sp.getUUID())) return false;
+		if (isRunner(sp) && !handOff(sp, "left")) stop(sp, "left");
+		else leave(sp);
+		return true;
+	}
+
 	private static void leave(ServerPlayer sp) {
+		// down in it: up again on the way out
+		BossParty.standUp(sp);
 		Return r = party.remove(sp.getUUID());
 		UcNet.send(sp, "SKY -");
 		if (r != null && server != null) {
@@ -193,6 +206,17 @@ final class CyberGrind {
 		sp.displayClientMessage(Component.literal(String.format(Locale.ROOT, "You left the Cyber Grind at wave %d; it goes on without you.", wave)), false);
 		hud(sp.getName().getString() + " LEFT THE RUN");
 		sendState();
+	}
+
+	/** For the debug commands: the run as the server has it. */
+	static String debugInfo() {
+		ServerPlayer r = runnerPlayer();
+		StringBuilder sb = new StringBuilder("running=" + running + " arenas=" + arenaMode + " wave=" + wave + " left=" + left + " countdown=" + countdown
+			+ " runner=" + (r != null ? r.getName().getString() : "-") + " fighters=" + fighters() + " party=");
+		if (server != null)
+			for (ServerPlayer o : server.getPlayerList().getPlayers())
+				if (party.containsKey(o.getUUID())) sb.append(o.getName().getString()).append(BossParty.isDown(o) ? "(down)" : "").append(',');
+		return sb.toString();
 	}
 
 	/** The world closed. */

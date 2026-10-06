@@ -431,6 +431,14 @@ public final class ServerOps {
 	// ------------------------------------------------------------------ damage to mobs
 
 	/** DMG id amount head explosion parry by: V1 (or one of its ULTRAKILL's enemies, by) hurt a Minecraft entity. */
+	/**
+	 * Minecraft health per ULTRAKILL damage V1 deals a mob. A revolver shot is two hits of 1.25 (ULTRAKILL's own beam),
+	 * a headshot twice that: at the start (40% Power) a headshot does 2, and at 10 a point that killed a spider (16) and
+	 * left a zombie (20) on a sliver. At 6, either takes two headshots; fully upgraded weapons still kill in one.
+	 * ULTRAKILL's enemies hitting mobs, and a parry, keep 10.
+	 */
+	private static final float V1_HIT = 6f;
+
 	private static void damage(ServerPlayer sp, ServerLevel level, String[] a) {
 		int id = Integer.parseInt(a[1]);
 		float amount = Float.parseFloat(a[2]);
@@ -454,13 +462,13 @@ public final class ServerOps {
 			}
 			return;
 		}
-		// ULTRAKILL has no invulnerability frames; 1 ULTRAKILL damage = 10 Minecraft health
+		// ULTRAKILL has no invulnerability frames
 		le.invulnerableTime = 0;
 		var src = enemy != null && !enemy.isRemoved() ? level.damageSources().mobAttack(enemy)
 			: fire ? level.damageSources().onFire() : explosion ? level.damageSources().explosion(sp, sp) : level.damageSources().playerAttack(sp);
 		// burning gasoline sets it alight in Minecraft too (fire resistance, and mobs that don't burn, shrug it off)
 		if (fire && !le.fireImmune()) le.setRemainingFireTicks(Math.max(le.getRemainingFireTicks(), 60));
-		le.hurtServer(level, src, amount * 10f);
+		le.hurtServer(level, src, amount * (enemy != null || parry ? 10f : V1_HIT));
 		if (enemy != null) {
 			// knocked about by one of ULTRAKILL's enemies: it lands without a fall
 			if (le.isAlive() && !(le instanceof Player)) fling(le);

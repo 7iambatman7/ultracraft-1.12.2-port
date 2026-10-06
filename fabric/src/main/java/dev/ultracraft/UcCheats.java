@@ -82,6 +82,8 @@ final class UcCheats {
 	/** Debug: switch a cheat by its id. */
 	static void debugSet(String id, boolean v) {
 		for (List<Cheat> list : List.of(ULTRAKILL, ULTRACRAFT)) for (Cheat ch : list) if (ch.id.equals(id)) set(ch, v);
+		// saved, as the Cheats page saves: one switched off here mustn't come back on from the file next time
+		UltracraftConfig.save();
 	}
 
 	private static void set(Cheat ch, boolean v) {

@@ -201,6 +201,10 @@ final class UkCommands {
 					CyberGrind.join(sp);
 					return 1;
 				}))
+				.then(Commands.literal("leave").executes(c -> {
+					if (!CyberGrind.leaveRun(player(c))) return fail(c, "You're not in a run in the Cyber Grind's arenas (round a shop, just walk away).");
+					return 1;
+				}))
 				.then(Commands.literal("start").executes(c -> {
 					ServerPlayer sp = player(c);
 					if (CyberGrind.running) return fail(c, "The Cyber Grind is already running: /uc grind join to go in with them.");
@@ -215,7 +219,7 @@ final class UkCommands {
 				})))
 				.then(Commands.literal("stop").executes(c -> {
 					if (!CyberGrind.running) return fail(c, "The Cyber Grind isn't running.");
-					if (!CyberGrind.isRunner(player(c)) && !cheats(c.getSource())) return fail(c, "It's not your run: leave from its shop instead.");
+					if (!CyberGrind.isRunner(player(c)) && !cheats(c.getSource())) return fail(c, "It's not your run: /uc grind leave to go back.");
 					CyberGrind.stop(player(c), "stopped");
 					return say(c, "The Cyber Grind stopped.");
 				})));
@@ -250,7 +254,7 @@ final class UkCommands {
 
 	private static int help(CommandContext<CommandSourceStack> c) {
 		return say(c, "/uc p [give <player> <amount>|add|take|set <amount>]\n/uc weapons all|none|list|give <gear>|take <gear>\n/uc upgrades max|reset|list|set <upgrade> <level>\n/uc settings"
-			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind start|join|arena <1-50>|stop\n/uc duel <player>|accept|decline|forfeit");
+			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind start|join|leave|arena <1-50>|stop\n/uc duel <player>|accept|decline|forfeit");
 	}
 
 	private static ServerPlayer player(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {

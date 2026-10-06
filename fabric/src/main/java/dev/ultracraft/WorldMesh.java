@@ -36,7 +36,11 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * budget, resent when a block in them changes, and dropped when they fall out of range.
  */
 public final class WorldMesh {
-	private static final int RH = 8; // sections around the player horizontally (128 blocks)
+	private static final int RH = 8; // sections around the player horizontally (128 blocks) at most
+	/** Sections around the player horizontally now (Performance → Terrain Range). */
+	private static int rh() {
+		return Math.max(4, Math.min(RH, UltracraftConfig.terrainRange / 16));
+	}
 	private static final int RV = 4; // sections above and below
 	private static final long BUDGET_NANOS = 3_000_000L;
 	private static final int[][] OFFSETS;
@@ -99,7 +103,9 @@ public final class WorldMesh {
 		int cx = center.getX() >> 4, cy = center.getY() >> 4, cz = center.getZ() >> 4;
 		int minSY = level.getMinSectionY(), maxSY = level.getMaxSectionY();
 		long start = System.nanoTime();
+		int rh = rh();
 		for (int[] o : OFFSETS) {
+			if (Math.abs(o[0]) > rh || Math.abs(o[2]) > rh) continue;
 			int sx = cx + o[0], sy = cy + o[1], sz = cz + o[2];
 			if (sy < minSY || sy > maxSY) continue;
 			long key = SectionPos.asLong(sx, sy, sz);
@@ -115,7 +121,7 @@ public final class WorldMesh {
 				Map.Entry<Long, Boolean> e = it.next();
 				long key = e.getKey();
 				int x = SectionPos.x(key), y = SectionPos.y(key), z = SectionPos.z(key);
-				if (Math.abs(x - cx) > RH + 1 || Math.abs(y - cy) > RV + 1 || Math.abs(z - cz) > RH + 1) {
+				if (Math.abs(x - cx) > rh + 1 || Math.abs(y - cy) > RV + 1 || Math.abs(z - cz) > rh + 1) {
 					if (e.getValue()) UkLink.send("SECX " + x + " " + y + " " + z);
 					dirty.remove(key);
 					it.remove();

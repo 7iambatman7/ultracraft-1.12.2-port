@@ -83,7 +83,7 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 		list.addSmall(open("Enemies & Bosses", "Which enemies come, ULTRAKILL's bosses and arenas.", UcSettingsScreen::enemies),
 			open("Gameplay", "Becoming V1, what breaks blocks, impact frames.", UcSettingsScreen::gameplay));
 		list.addSmall(open("Shop & Rewards", "The OP Shop, the shop's screen, style rewards.", UcSettingsScreen::shop),
-			open("Performance", "ULTRAKILL's resolution and frame rate.", UcSettingsScreen::performance));
+			open("Performance", "ULTRAKILL's resolution and frame rate, effects, blood stains, terrain range, and a Low-End PC preset.", UcSettingsScreen::performance));
 		list.addSmall(open("Music", "ULTRAKILL's music in fights: which song, boss themes, volumes.", UcSettingsScreen::music),
 			open("Cheats", "ULTRAKILL's Sandbox cheats and a few of Ultracraft's.", UcCheats::fill));
 		list.addSmall(open("ULTRAKILL Settings", "Sensitivity, field of view, screen shake... as Ultracraft plays it (ULTRAKILL's own settings stay as they are).",
@@ -147,6 +147,11 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 			return this;
 		}
 
+		/** The page again, showing settings changed behind its back (a preset). */
+		void reopen() {
+			Minecraft.getInstance().setScreen(new Category(lastScreen, getTitle().getString(), fill));
+		}
+
 		@Override
 		public void removed() {
 			super.removed();
@@ -203,6 +208,10 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 	}
 
 	private static void performance(Category c) {
+		c.add(Button.builder(Component.literal("Low-End PC Preset"), b -> preset(c, UltracraftConfig::lowEndPreset))
+				.tooltip(Tooltip.create(Component.literal("Everything on this page at its cheapest that still plays well: 480p, Low effects, 1,500 blood stains, no extra gore, 64 blocks of terrain, Low-Latency Frames off. Each can still be changed below."))).build(),
+			Button.builder(Component.literal("Reset to Defaults"), b -> preset(c, UltracraftConfig::performanceDefaults))
+				.tooltip(Tooltip.create(Component.literal("Everything on this page back as it came: 720p, frame rate matching Minecraft, High effects, all blood stains, extra gore, 128 blocks of terrain."))).build());
 		c.add(slider("ULTRAKILL Resolution", "How tall ULTRAKILL draws its picture (scaled up to fill the window). Lower = much faster; this is the biggest frame rate setting.",
 				0, 6, resIndex(), v -> RES_NAMES[v], v -> UltracraftConfig.v1Height = RES[v]),
 			slider("ULTRAKILL FPS Cap", "How many frames a second ULTRAKILL draws. Match Minecraft (the far left) keeps it in step with Minecraft's own frame limit, the smoothest. It shares the graphics card with Minecraft: a lower cap leaves Minecraft more.",
@@ -212,6 +221,36 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 				UltracraftConfig.lockStep, v -> UltracraftConfig.lockStep = v),
 			bool("Low-Latency Frames", "ULTRAKILL hands each frame to Minecraft as soon as it's drawn, rather than a frame or two later: less input lag. On a slow graphics card, off may give a few more frames a second.",
 				UltracraftConfig.lowLatency, v -> UltracraftConfig.lowLatency = v));
+		c.add(slider("Effects Quality", "How much ULTRAKILL draws for its effects. High: as ULTRAKILL has them. Medium: simpler explosions and fire, no environment particles, less gore at once. Low: also simpler spawn effects, no hit sparks, far less gore at once and no shadows.",
+				0, 2, UltracraftConfig.effects, v -> FX_NAMES[v], v -> UltracraftConfig.effects = v),
+			slider("Blood Stains", "How many of ULTRAKILL's blood stains stay painted on Minecraft's blocks (the oldest go first). Fewer is faster in long fights.",
+				0, STAINS.length - 1, stainIndex(), v -> STAIN_NAMES[v], v -> UltracraftConfig.stainCap = STAINS[v]),
+			bool("Extra Gore", "Ultracraft's extra blood on every death (sprays and bursts on top of ULTRAKILL's own). Off: just ULTRAKILL's own.",
+				UltracraftConfig.extraGore, v -> UltracraftConfig.extraGore = v),
+			slider("Terrain Range", "How far around V1 Minecraft's terrain becomes ULTRAKILL's walls and floors. Less is faster for both games; beyond it, shots fly through hills and ULTRAKILL's effects show through them.",
+				0, TERRAIN.length - 1, terrainIndex(), v -> TERRAIN[v] + " blocks", v -> UltracraftConfig.terrainRange = TERRAIN[v]));
+	}
+
+	private static final String[] FX_NAMES = {"Low", "Medium", "High"};
+	private static final int[] STAINS = {0, 500, 1500, 4096, BloodStains.MAX};
+	private static final String[] STAIN_NAMES = {"Off", "500", "1,500", "4,096", "All (8,192)"};
+	private static final int[] TERRAIN = {64, 96, 128};
+
+	private static int stainIndex() {
+		for (int i = STAINS.length - 1; i >= 0; i--) if (UltracraftConfig.stainCap >= STAINS[i]) return i;
+		return 0;
+	}
+
+	private static int terrainIndex() {
+		for (int i = TERRAIN.length - 1; i >= 0; i--) if (UltracraftConfig.terrainRange >= TERRAIN[i]) return i;
+		return 0;
+	}
+
+	private static void preset(Category c, Runnable apply) {
+		apply.run();
+		UltracraftConfig.sendOpts();
+		UltracraftConfig.save();
+		c.reopen();
 	}
 
 	private static void music(Category c) {

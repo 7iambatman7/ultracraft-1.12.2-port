@@ -3480,7 +3480,7 @@ namespace UltraBridge
             {
                 // gibs and bursts live in a gore zone, which shows and cleans them up like any enemy's
                 var gz = McGoreZone();
-                var burst = bsm.GetFromQueue(BSType.chestExplosion);
+                var burst = ExtraGore ? bsm.GetFromQueue(BSType.chestExplosion) : null;
                 if (burst != null)
                 {
                     burst.transform.position = at;

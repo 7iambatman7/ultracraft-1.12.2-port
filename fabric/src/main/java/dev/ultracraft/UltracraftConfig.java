@@ -85,12 +85,21 @@ public final class UltracraftConfig {
 	public static boolean lockStep = true;
 	/** Low-Latency Frames: ULTRAKILL hands each frame over as soon as it's drawn (less delay, a little less throughput). */
 	public static boolean lowLatency = true;
+	/** Effects Quality: 2 High (ULTRAKILL's own), 1 Medium, 0 Low (ULTRAKILL's simpler explosions, fire, spawns, less gore). */
+	public static int effects = 2;
+	/** How many of ULTRAKILL's blood stains Minecraft keeps drawn on its blocks (0: none). */
+	public static int stainCap = BloodStains.MAX;
+	/** Ultracraft's extra blood on every death (sprays and bursts on top of ULTRAKILL's own). */
+	public static boolean extraGore = true;
+	/** How far (blocks) Minecraft's terrain goes to ULTRAKILL for its walls and floors (beyond: no collision, no hiding). */
+	public static int terrainRange = 128;
 	/** Cheats (UcCheats) switched on: id -> on. */
 	public static final Map<String, Boolean> cheats = new TreeMap<>();
 
 	private static final String[] KEYS = {"v1Height", "autoV1", "ukSpawns", "mcMobs", "sharpShop", "grindBest", "bosses", "bossMinutes", "bossDifficulty", "traitChance", "bossWarnSeconds",
 		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFpsCap", "steveEnemies", "fightMusic", "bossThemes",
-		"calmMusic", "hushMcMusic", "styleRewards", "arenas", "grindArenas", "lockStep", "lowLatency"};
+		"calmMusic", "hushMcMusic", "styleRewards", "arenas", "grindArenas", "lockStep", "lowLatency",
+		"effects", "stainCap", "extraGore", "terrainRange"};
 
 	private static final String COMMENT = "Ultracraft (most of this is on the Ultracraft settings screen): v1Height = ULTRAKILL render height (0 = full window, lower = faster);"
 		+ " autoV1 = become V1 automatically; ukSpawns = ULTRAKILL's enemies spawn in the dark; mcMobs = Minecraft's monsters spawn;"
@@ -98,7 +107,8 @@ public final class UltracraftConfig {
 		+ " bossMinutes = minutes of play between them; bossDifficulty = 0 by bosses beaten, 1-5 EASY to V1 MUST DIE; traitChance = percent of bosses with traits; bossWarnSeconds = warning before one arrives; allGear = every weapon without buying it;"
 		+ " playerBlockDamage / enemyBlockDamage = V1's / enemies' attacks break blocks; impactFrames = hitstop length (0.1 to 3);"
 		+ " launchUltrakill = start ULTRAKILL with Minecraft; opShop = upgrades go to 1500%; uk.* = ULTRAKILL settings used while playing Ultracraft;"
-		+ " fightMusic = off, random or a song of ULTRAKILL's soundtrack; cheat.* = cheats on; arenas = ULTRAKILL arenas generate in new chunks; grindArenas = the Cyber Grind runs through its own 50 arenas; lockStep = Minecraft waits for ULTRAKILL's frames";
+		+ " fightMusic = off, random or a song of ULTRAKILL's soundtrack; cheat.* = cheats on; arenas = ULTRAKILL arenas generate in new chunks; grindArenas = the Cyber Grind runs through its own 50 arenas; lockStep = Minecraft waits for ULTRAKILL's frames;"
+		+ " effects = 2 high, 1 medium, 0 low; stainCap = blood stains kept on blocks (0 none); extraGore = Ultracraft's extra death blood; terrainRange = blocks of terrain sent to ULTRAKILL (64-128)";
 
 	private UltracraftConfig() {}
 
@@ -165,6 +175,10 @@ public final class UltracraftConfig {
 			grindArenas = bool(p, "grindArenas", grindArenas);
 			lockStep = bool(p, "lockStep", lockStep);
 			lowLatency = bool(p, "lowLatency", lowLatency);
+			effects = Math.max(0, Math.min(2, Integer.parseInt(p.getProperty("effects", Integer.toString(effects)).trim())));
+			stainCap = Math.max(0, Math.min(BloodStains.MAX, Integer.parseInt(p.getProperty("stainCap", Integer.toString(stainCap)).trim())));
+			extraGore = bool(p, "extraGore", extraGore);
+			terrainRange = Math.max(64, Math.min(128, Integer.parseInt(p.getProperty("terrainRange", Integer.toString(terrainRange)).trim())));
 			ukPrefs.clear();
 			for (String k : p.stringPropertyNames()) {
 				if (k.startsWith("uk.")) ukPrefs.put(k.substring(3), p.getProperty(k).trim());
@@ -212,6 +226,10 @@ public final class UltracraftConfig {
 		p.setProperty("grindArenas", Boolean.toString(grindArenas));
 		p.setProperty("lockStep", Boolean.toString(lockStep));
 		p.setProperty("lowLatency", Boolean.toString(lowLatency));
+		p.setProperty("effects", Integer.toString(effects));
+		p.setProperty("stainCap", Integer.toString(stainCap));
+		p.setProperty("extraGore", Boolean.toString(extraGore));
+		p.setProperty("terrainRange", Integer.toString(terrainRange));
 		for (var e : cheats.entrySet()) p.setProperty("cheat." + e.getKey(), Boolean.toString(e.getValue()));
 		for (var e : ukPrefs.entrySet()) p.setProperty("uk." + e.getKey(), e.getValue());
 		for (var e : ukBinds.entrySet()) p.setProperty("bind." + e.getKey(), Integer.toString(e.getValue()));
@@ -246,12 +264,36 @@ public final class UltracraftConfig {
 
 	/** What ULTRAKILL needs to know of these: OPTS key=value ... (sent on connecting and after every change). */
 	public static void sendOpts() {
-		UkLink.send(String.format(Locale.ROOT, "OPTS impact=%.2f fps=%d playerBlocks=%d enemyBlocks=%d lowlat=%d", impactFrames, ukFpsNow(), playerBlockDamage ? 1 : 0,
-			enemyBlockDamage ? 1 : 0, lowLatency ? 1 : 0));
+		UkLink.send(String.format(Locale.ROOT, "OPTS impact=%.2f fps=%d playerBlocks=%d enemyBlocks=%d lowlat=%d fx=%d gore=%d stains=%d", impactFrames, ukFpsNow(),
+			playerBlockDamage ? 1 : 0, enemyBlockDamage ? 1 : 0, lowLatency ? 1 : 0, effects, extraGore ? 1 : 0, stainCap > 0 ? 1 : 0));
+		BloodStains.setCap(stainCap);
 		for (var e : ukPrefs.entrySet()) UkLink.send("UKPREF " + e.getKey() + " " + e.getValue());
 		for (var e : ukBinds.entrySet()) if (!UcKeybindsScreen.isGun(e.getKey())) UkLink.send("UKBIND " + e.getKey() + " " + e.getValue());
 		sendMusic();
 		UcCheats.sendAll();
+	}
+
+	/** Low-End PC: everything on the Performance page at its cheapest that still plays well. */
+	public static void lowEndPreset() {
+		v1Height = 480;
+		ukFps = 0;
+		effects = 0;
+		stainCap = 1500;
+		extraGore = false;
+		terrainRange = 64;
+		lowLatency = false;
+	}
+
+	/** The Performance page's defaults. */
+	public static void performanceDefaults() {
+		v1Height = 720;
+		ukFps = 0;
+		effects = 2;
+		stainCap = BloodStains.MAX;
+		extraGore = true;
+		terrainRange = 128;
+		lockStep = true;
+		lowLatency = true;
 	}
 
 	/** The fight music, to ULTRAKILL: MUSICOPTS calm=0/1, MUSIC off|random|song key. */

@@ -95,6 +95,12 @@ final class DebugCommands {
 			case "mobs" -> UltracraftConfig.mcMobs = a[1].equals("1");
 			case "settings" -> mc.setScreen(new UcSettingsScreen(null));
 			case "page" -> mc.setScreen(UcSettingsScreen.page(a[1]));
+			case "perf" -> {
+				// perf low|default: the Performance page's presets
+				if (a[1].equals("low")) UltracraftConfig.lowEndPreset();
+				else UltracraftConfig.performanceDefaults();
+				UltracraftConfig.sendOpts();
+			}
 			case "picker" -> mc.setScreen(new UcMusicScreen(new UcSettingsScreen(null)));
 			case "cheat" -> UcCheats.debugSet(a[1], a[2].equals("1"));
 			case "respawn" -> mc.player.respawn();

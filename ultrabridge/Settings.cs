@@ -47,6 +47,9 @@ namespace UltraBridge
                         // how often ULTRAKILL draws: every frame it draws costs the graphics card Minecraft needs too
                         if (p[0] == "fps" && int.TryParse(p[1], out var fps)) FpsCap = Mathf.Clamp(fps, 30, 240);
                         if (p[0] == "lowlat") LowLatency = p[1] == "1";
+                        if (p[0] == "fx" && int.TryParse(p[1], out var fx)) SetEffects(fx);
+                        if (p[0] == "gore") ExtraGore = p[1] == "1";
+                        if (p[0] == "stains") SetStains(p[1] == "1");
                     }
                     break;
                 case "VIEW":

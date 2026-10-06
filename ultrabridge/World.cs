@@ -1215,7 +1215,7 @@ namespace UltraBridge
 
         public void QueueStain(Vector3 pos, Vector3 normal)
         {
-            if (!levelPrepared || !originSet || stainPos.Count >= 4096) return;
+            if (!levelPrepared || !originSet || stainPos.Count >= 4096 || !StainsOn) return;
             stainPos.Add(pos);
             stainNorm.Add(normal);
         }

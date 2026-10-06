@@ -82,8 +82,15 @@ They're Ultracraft's settings: ULTRAKILL's own save and settings are never touch
 
 ## If it's laggy
 
-Two games run at once and share your graphics card. In **Ultracraft...** settings:
-- **ULTRAKILL Resolution**: 540p or 480p is the biggest frame rate win (720p is the default).
+Two games run at once and share your graphics card. In **Ultracraft... → Performance**:
+- **Low-End PC Preset**: one click sets everything below to its cheap option (each can still be changed after);
+  **Reset to Defaults** undoes it.
+- **ULTRAKILL Resolution**: 540p, 480p or 360p is the biggest frame rate win (720p is the default).
+- **Effects Quality**: Medium or Low uses ULTRAKILL's simpler explosions, fire and spawn effects. It also turns off
+  environment particles and keeps less gore on screen. Low also drops hit sparks and shadows.
+- **Blood Stains**: how many stay painted on Minecraft's blocks (Off, 500, 1,500, 4,096 or All).
+- **Extra Gore**: off leaves only ULTRAKILL's own blood on deaths.
+- **Terrain Range**: 64 or 96 blocks of terrain sent to ULTRAKILL instead of 128 (less work for both games).
 - **ULTRAKILL FPS Cap**: Match Minecraft (the default) follows Minecraft's frame limit, the smoothest (as V1, Minecraft
   shows every ULTRAKILL frame once, in step with it); a lower cap leaves Minecraft more room on a weak graphics card.
 - **Low-Latency Frames** (on by default): ULTRAKILL hands each frame over as soon as it's drawn: less input lag.

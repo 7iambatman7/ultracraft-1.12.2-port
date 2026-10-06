@@ -57,7 +57,7 @@ namespace UltraBridge
         {
             var bsm = MonoSingleton<BloodsplatterManager>.Instance;
             var gz = I != null ? I.McGoreZone() : null;
-            if (bsm == null || gz == null || !bsm.goreOn) return;
+            if (bsm == null || gz == null || !bsm.goreOn || !ExtraGore) return;
             size = Mathf.Clamp(size, 0.6f, 6f);
             deaths.Add(new Death { at = at, radius = Mathf.Clamp(1.2f + size * 0.6f, 1.5f, 4f) * K, until = Time.time + 4f });
             if (deaths.Count > 64) deaths.RemoveAt(0);

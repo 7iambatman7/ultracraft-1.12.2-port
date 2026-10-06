@@ -30,7 +30,10 @@ import org.joml.Vector3f;
  * block's light and fog. A stain goes when its block does; past a few thousand the oldest go first, as in ULTRAKILL.
  */
 final class BloodStains {
-	private static final int MAX = 8192;
+	static final int MAX = 8192;
+	/** How many are kept (Performance → Blood Stains); gasoline always keeps a few, it shows where it's spread. */
+	private static int cap = MAX;
+	private static final int OIL_MIN = 256;
 	/** How far a stain is drawn from (blocks). */
 	private static final double RANGE = 96.0;
 	private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath("ultracraft", "dynamic/blood");
@@ -59,6 +62,27 @@ final class BloodStains {
 		WorldRenderEvents.BEFORE_TRANSLUCENT.register(BloodStains::render);
 	}
 
+	/** Performance → Blood Stains: fewer kept (and drawn); those past the new limit go. */
+	static void setCap(int c) {
+		c = Mth.clamp(c, 0, MAX);
+		if (c == cap) return;
+		cap = c;
+		int used = used();
+		for (int i = used; i < MAX; i++) {
+			if (alive[i]) {
+				alive[i] = false;
+				live--;
+			}
+		}
+		if (next >= used) next = 0;
+		if (checked >= used) checked = 0;
+	}
+
+	/** Slots in use: the cap, or a few for gasoline when blood stains are off. */
+	private static int used() {
+		return Math.max(cap, OIL_MIN);
+	}
+
 	static void setSize(float s) {
 		size = Mth.clamp(s, 0.2f, 1.5f);
 	}
@@ -84,7 +108,7 @@ final class BloodStains {
 
 	/** Gasoline caught fire around there: it burns away. */
 	static void burnOil(float x, float y, float z) {
-		for (int i = 0; i < MAX; i++) {
+		for (int i = 0, n = used(); i < n; i++) {
 			if (!alive[i] || kind[i] != OIL) continue;
 			float dx = cx[i] - x, dy = cy[i] - y, dz = cz[i] - z;
 			if (dx * dx + dy * dy + dz * dz > 2.25f) continue;
@@ -123,8 +147,9 @@ final class BloodStains {
 			on = BlockPos.containing(x - nx * 0.25, y - ny * 0.25, z - nz * 0.25);
 			if (!holds(level, on)) return;
 		}
+		if (adding == BLOOD && cap == 0) return;
 		int i = next;
-		next = (next + 1) % MAX;
+		next = (next + 1) % used();
 		if (!alive[i]) live++;
 		alive[i] = true;
 		cx[i] = x + nx * 0.004f;
@@ -174,7 +199,7 @@ final class BloodStains {
 		if (level == null || live == 0) return;
 		for (int k = 0; k < 256; k++) {
 			int i = checked;
-			checked = (checked + 1) % MAX;
+			checked = (checked + 1) % used();
 			if (!alive[i]) continue;
 			if (!holds(level, BlockPos.of(support[i]))) {
 				alive[i] = false;
@@ -199,7 +224,7 @@ final class BloodStains {
 		ps.translate(-cam.x, -cam.y, -cam.z);
 		PoseStack.Pose pose = ps.last();
 		double r2 = RANGE * RANGE;
-		for (int i = 0; i < MAX; i++) {
+		for (int i = 0, n = used(); i < n; i++) {
 			if (!alive[i]) continue;
 			double dx = cx[i] - cam.x, dy = cy[i] - cam.y, dz = cz[i] - cam.z;
 			if (dx * dx + dy * dy + dz * dz > r2) continue;

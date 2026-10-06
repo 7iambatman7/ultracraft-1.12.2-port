@@ -12,7 +12,7 @@ You need to own **ULTRAKILL** (Steam) and play on **Windows**. Ultracraft doesn'
 - **The shop** (a craftable block): spend P on weapons, variants, the Alternate weapons, and upgrades for every weapon and arm.
 - **The Cyber Grind**: wave after wave through 50 arenas styled after ULTRAKILL's levels, under ULTRAKILL's own skies.
 - **Style rewards, fight music** from ULTRAKILL's soundtrack, ULTRAKILL's Sandbox cheats and Ultracraft's own.
-- **Multiplayer**: host with Essential or Open to LAN; other players show up as V1 with their guns, and everyone fights the same enemies and bosses.
+- **Multiplayer**: host with Essential or Open to LAN; other players show up as V1 with their guns, names and health, and everyone fights the same enemies and bosses. Bosses go after every V1, a downed teammate is revived by standing where they fell, the Cyber Grind can be run together, and `/uc duel` challenges another V1.
 
 ## Installing
 Install this mod and Fabric API, have Steam running, and start Minecraft. On the title screen, Ultracraft asks once to set ULTRAKILL up: it adds **BepInEx 5** (an open-source mod loader, included in this mod) and its **UltraBridge plugin** to ULTRAKILL's folder. Nothing else there is changed, and ULTRAKILL's own save and settings are never touched. After that, ULTRAKILL starts and closes with Minecraft.

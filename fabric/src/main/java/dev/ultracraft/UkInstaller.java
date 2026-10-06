@@ -39,21 +39,46 @@ final class UkInstaller {
 
 	private UkInstaller() {}
 
+	/** ULTRAKILL's folder, or null (looked for once). */
+	static Path game() {
+		if (!looked) {
+			looked = true;
+			try {
+				game = findUltrakill();
+			} catch (Exception e) {
+				LOG.warn("looking for ULTRAKILL: {}", e.toString());
+			}
+			if (game != null) LOG.info("ULTRAKILL at {}", game);
+			else LOG.warn("ULTRAKILL not found (Steam libraries, a running ULTRAKILL, the config's ultrakillDir): its plugin isn't set up");
+		}
+		return game;
+	}
+
+	private static Path game;
+	private static boolean looked;
+
+	/** Whether setting up would change anything in ULTRAKILL's folder (asked before the first time it does). */
+	static boolean needed() {
+		Path g = game();
+		if (g == null || System.getProperty("ultracraft.noInstall") != null) return false;
+		try {
+			if (bundled("ultrakill/bepinex") != null && !(Files.isRegularFile(g.resolve("BepInEx/core/BepInEx.dll")) && Files.isRegularFile(g.resolve("winhttp.dll")))
+				&& !Files.isRegularFile(g.resolve("BepInEx/core/BepInEx.Core.dll"))) return true;
+			Path src = bundled("ultrakill/plugin/UltraBridge.dll");
+			if (src == null) return false;
+			Path target = g.resolve("BepInEx/plugins/UltraBridge/UltraBridge.dll");
+			if (!Files.isRegularFile(target)) return true;
+			return !sha256(Files.readAllBytes(target)).equals(sha256(Files.readAllBytes(src)));
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
 	/** Sets ULTRAKILL up if it needs it. Runs before ULTRAKILL is started. */
 	static Result install() {
 		if (System.getProperty("ultracraft.noInstall") != null) return null;
-		Path game;
-		try {
-			game = findUltrakill();
-		} catch (Exception e) {
-			LOG.warn("looking for ULTRAKILL: {}", e.toString());
-			game = null;
-		}
-		if (game == null) {
-			LOG.warn("ULTRAKILL not found (Steam libraries, a running ULTRAKILL, the config's ultrakillDir): its plugin isn't set up");
-			return new Result("ULTRAKILL not found", "Install it through Steam, or set ultrakillDir in config/ultracraft.properties", true);
-		}
-		LOG.info("ULTRAKILL at {}", game);
+		Path game = game();
+		if (game == null) return new Result("ULTRAKILL not found", "Install it through Steam, or set ultrakillDir in config/ultracraft.properties", true);
 		try {
 			if (Files.isRegularFile(game.resolve("BepInEx/core/BepInEx.Core.dll")) && !Files.isRegularFile(game.resolve("BepInEx/core/BepInEx.dll"))) {
 				LOG.warn("ULTRAKILL has BepInEx 6; UltraBridge needs BepInEx 5");

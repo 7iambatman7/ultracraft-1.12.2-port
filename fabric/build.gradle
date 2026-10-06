@@ -104,18 +104,27 @@ processResources {
 	def java = project.ext.java_release
 	filesMatching("ultracraft.mixins.json") { filter { it.replace('"JAVA_21"', '"JAVA_' + java + '"') } }
 	// The ULTRAKILL side, for the mod to set up on the player's machine (UkInstaller): the UltraBridge plugin as just
-	// built, and BepInEx 5 (open source, LGPL; see ultrakill/BEPINEX-NOTICE.txt) as found in the ULTRAKILL folder it was
-	// built against (-PukDir=..., the same folder ultrabridge/UltraBridge.csproj builds against). Either one missing:
-	// the jar goes without it, and players install that part by hand.
+	// built, and BepInEx 5 (open source, LGPL; see ultrakill/BEPINEX-NOTICE.txt). BepInEx comes from ultrabridge/bepinex
+	// (kept out of git), filled the first time from the ULTRAKILL folder the plugin builds against (-PukDir=...). A
+	// jar without either would install nothing, so the build stops instead.
 	def ukDir = file((project.findProperty("ukDir") ?: "D:/SteamLibrary/steamapps/common/ULTRAKILL").toString())
+	def bepinex = file("../ultrabridge/bepinex")
 	def bridge = file("../ultrabridge/bin/Release/net472/UltraBridge.dll")
-	inputs.files(bridge).optional().withPropertyName("ultraBridge")
+	doFirst {
+		if (!new File(bepinex, "BepInEx/core/BepInEx.dll").isFile()) {
+			if (!new File(ukDir, "BepInEx/core/BepInEx.dll").isFile()) throw new GradleException("no BepInEx 5 to bundle: put it in ultrabridge/bepinex, or in ULTRAKILL (-PukDir=...)")
+			project.copy {
+				from(ukDir) { include "winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt", "BepInEx/core/*.dll" }
+				into bepinex
+			}
+		}
+		if (!bridge.isFile()) throw new GradleException("build the UltraBridge plugin first: ${bridge} is missing")
+	}
 	from(bridge.parentFile) {
 		include "UltraBridge.dll"
 		into "ultrakill/plugin"
 	}
-	from(ukDir) {
-		include "winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt", "BepInEx/core/*.dll"
+	from(bepinex) {
 		into "ultrakill/bepinex"
 	}
 }

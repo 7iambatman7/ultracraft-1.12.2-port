@@ -13,6 +13,8 @@ fabric/.gradle/
 fabric/build/
 ultrabridge/bin/
 ultrabridge/obj/
+# BepInEx 5 as bundled into the jar (copied from an ULTRAKILL install; see fabric/build.gradle)
+ultrabridge/bepinex/
 dist/
 *.log
 # screenshots of the game

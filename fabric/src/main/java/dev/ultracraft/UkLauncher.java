@@ -6,7 +6,10 @@ import java.io.InputStreamReader;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,19 +19,49 @@ import org.slf4j.LoggerFactory;
  * through Steam with -ultracraft (its window hidden, the Sandbox loading in the background, waiting for a world), and
  * closing Minecraft closes the ULTRAKILL it started. An ULTRAKILL already running is used as it is. The "Start
  * ULTRAKILL" setting (or -Dultracraft.noLaunch, which the test launcher passes) turns this off. First, ULTRAKILL gets
- * its half of Ultracraft (UkInstaller: BepInEx and the UltraBridge plugin), with a toast saying what was done.
+ * its half of Ultracraft (UkInstaller: BepInEx and the UltraBridge plugin), with a toast saying what was done; the
+ * first time that would change ULTRAKILL's folder, only once the player says yes on the title screen.
  */
 final class UkLauncher {
 	private static final Logger LOG = LoggerFactory.getLogger("ultracraft");
 	private static boolean started;
+	private static boolean askPending;
+
+	private static void setUp(net.minecraft.client.Minecraft mc) {
+		UkInstaller.Result r = UkInstaller.install();
+		if (r != null) SystemToast.add(mc.getToastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION, Component.literal(r.title()), Component.literal(r.detail()));
+	}
 
 	private UkLauncher() {}
 
 	static void register() {
 		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> {
-			UkInstaller.Result r = UkInstaller.install();
-			if (r != null) SystemToast.add(mc.getToastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION, Component.literal(r.title()), Component.literal(r.detail()));
+			// the first time ULTRAKILL's folder would change, the player is asked (on the title screen); after a yes,
+			// the plugin is kept up to date without asking
+			if (UkInstaller.needed() && !UltracraftConfig.setupUltrakill) {
+				askPending = true;
+				return;
+			}
+			setUp(mc);
 			launch();
+		});
+		ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> {
+			if (!askPending || !(screen instanceof TitleScreen)) return;
+			askPending = false;
+			mc.execute(() -> mc.setScreen(new ConfirmScreen(yes -> {
+				if (yes) {
+					UltracraftConfig.setupUltrakill = true;
+					UltracraftConfig.save();
+					setUp(mc);
+					launch();
+				}
+				mc.setScreen(new TitleScreen());
+			}, Component.literal("Set up ULTRAKILL for Ultracraft?"),
+				Component.literal("Ultracraft plays the real ULTRAKILL alongside Minecraft. For that, ULTRAKILL needs BepInEx 5 (a mod loader) and "
+					+ "Ultracraft's UltraBridge plugin, both included in this mod. Ultracraft will add them to\n" + UkInstaller.game()
+					+ "\n\nNothing else there is changed, and ULTRAKILL's own save and settings are never touched. Its plugin is kept up to date with "
+					+ "each new version of Ultracraft. You can remove it any time: delete BepInEx/plugins/UltraBridge."),
+				Component.literal("Install"), Component.literal("Not now"))));
 		});
 		ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> close());
 	}

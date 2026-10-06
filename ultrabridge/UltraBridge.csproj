@@ -8,14 +8,17 @@
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <GameDir Condition="'$(GameDir)' == ''">D:\SteamLibrary\steamapps\common\ULTRAKILL</GameDir>
     <Managed>$(GameDir)\ULTRAKILL_Data\Managed</Managed>
+    <!-- BepInEx: ULTRAKILL's own, or the copy kept for the Fabric jar (bepinex/, out of git) when ULTRAKILL has none yet -->
+    <BepInExCore>$(GameDir)\BepInEx\core</BepInExCore>
+    <BepInExCore Condition="!Exists('$(GameDir)\BepInEx\core\BepInEx.dll')">$(MSBuildThisFileDirectory)bepinex\BepInEx\core</BepInExCore>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net472" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <!-- references to the user's own install; nothing from the game is copied into the build output -->
-    <Reference Include="BepInEx"><HintPath>$(GameDir)\BepInEx\core\BepInEx.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="0Harmony"><HintPath>$(GameDir)\BepInEx\core\0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="BepInEx"><HintPath>$(BepInExCore)\BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(BepInExCore)\0Harmony.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(Managed)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>$(Managed)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(Managed)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>

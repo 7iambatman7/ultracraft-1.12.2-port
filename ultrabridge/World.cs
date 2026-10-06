@@ -174,6 +174,8 @@ namespace UltraBridge
                         sb.Append(" | ").Append(e.enemyType).Append(" active=").Append(e.gameObject.activeInHierarchy).Append(" dead=").Append(e.dead)
                           .Append(" hp=").Append(S(e.health)).Append(" at ").Append(mc.ToString("F1"))
                           .Append(" from V1 ").Append(nm != null ? (Vector3.Distance(nm.transform.position, e.transform.position) / K).ToString("0") : "?");
+                        var nma = e.GetComponent<UnityEngine.AI.NavMeshAgent>();
+                        if (nma != null && nma.enabled) sb.Append(" nav=").Append(nma.isOnNavMesh ? (nma.hasPath ? nma.pathStatus.ToString() : "idle") : "off");
                     }
                     sb.Insert(7, " n=" + n);
                     Plugin.Log.LogInfo(sb.ToString());
@@ -474,13 +476,40 @@ namespace UltraBridge
 
         /// <summary>Minecraft moved the origin (V1 again after Steve): what stood around the old one is rebuilt where
         /// Minecraft says next (the shops come back with the next SHOPS).</summary>
-        void OriginMoved()
+        void OriginMoved(bool clearBosses)
         {
             foreach (var go in shops.Values) if (go != null) Destroy(go);
             shops.Clear();
             stainPos.Clear();
             stainNorm.Clear();
-            ClearBosses();
+            if (clearBosses) ClearBosses();
+        }
+
+        /// <summary>The origin moved by shift (ULTRAKILL units): ULTRAKILL's enemies and bosses stay where they are in
+        /// Minecraft's world.</summary>
+        void ShiftActors(Vector3 shift)
+        {
+            var moved = new HashSet<Transform>();
+            void Move(Transform t)
+            {
+                if (t == null || !moved.Add(t)) return;
+                t.position += shift;
+                var rb = t.GetComponent<Rigidbody>();
+                if (rb != null) rb.position = t.position;
+                var agent = t.GetComponent<NavMeshAgent>();
+                if (agent != null && agent.enabled && agent.isOnNavMesh) agent.Warp(t.position);
+            }
+            foreach (var f in bosses.Values)
+                foreach (var part in f.parts)
+                {
+                    if (part.go != null) Move(part.go.transform);
+                    part.lastAt += shift;
+                    part.ground += shift;
+                }
+            foreach (var eid in ukEnemies.Values) if (eid != null && !eid.dead && !bossEids.Contains(eid)) Move(eid.transform);
+            foreach (var k in new List<int>(ukEnemyAt.Keys)) ukEnemyAt[k] += shift;
+            Physics.SyncTransforms();
+            Plugin.Log.LogInfo("origin moved: actors shifted by " + shift);
         }
 
         float nextExtras;

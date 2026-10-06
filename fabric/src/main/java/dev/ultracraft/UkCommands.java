@@ -164,8 +164,14 @@ final class UkCommands {
 			.then(Commands.literal("bosses")
 				.then(Commands.literal("on").executes(c -> bosses(c, true)))
 				.then(Commands.literal("off").executes(c -> bosses(c, false))))
-			// the Cyber Grind's arenas, straight to one (its waves start as usual), or out of them
+			// the Cyber Grind's arenas: a run from a random one or straight to one (its waves start as usual), or out of them
 			.then(Commands.literal("grind")
+				.then(Commands.literal("start").executes(c -> {
+					ServerPlayer sp = player(c);
+					if (CyberGrind.running) return fail(c, "The Cyber Grind is already running: /uc grind stop first.");
+					if (!CyberGrind.startArenas(sp, -1)) return fail(c, "Become V1 first.");
+					return say(c, "Into the Cyber Grind.");
+				}))
 				.then(Commands.literal("arena").then(Commands.argument("number", IntegerArgumentType.integer(1, GrindArenas.ARENAS.size())).executes(c -> {
 					ServerPlayer sp = player(c);
 					if (CyberGrind.running) return fail(c, "The Cyber Grind is already running: /uc grind stop first.");
@@ -183,7 +189,7 @@ final class UkCommands {
 
 	private static int help(CommandContext<CommandSourceStack> c) {
 		return say(c, "/uc p [add|take|set <amount>]\n/uc weapons all|none|list|give <gear>|take <gear>\n/uc upgrades max|reset|list|set <upgrade> <level>\n/uc settings"
-			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind arena <1-50>|stop");
+			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind start|arena <1-50>|stop");
 	}
 
 	private static ServerPlayer player(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {

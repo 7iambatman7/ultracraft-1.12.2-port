@@ -157,10 +157,12 @@ the weapon between standard and alternate.
 
 **The Cyber Grind** starts from the shop's Cyber Grind page. With **Cyber Grind Arenas** on (Enemies & Bosses), you
 and the other V1s by the shop go into the Grind's own arenas: 50 of them, each after one of ULTRAKILL's levels or
-layers, under that layer's ULTRAKILL sky. Every 5 waves the run moves on to the next arena, and every 15th wave is a
-boss. The arenas can't be broken. Each has a temporary shop near its edge, under a column of lights (the chat says
-which way): **Leave** on its Cyber Grind page takes everyone back to where they started. `/uc grind arena <1-50>` jumps
-straight to an arena, `/uc grind stop` ends the run. With the setting off, the waves come round the shop you started
+layers, under one of that layer's ULTRAKILL skies. Each run starts in a random arena, and every 5 waves it moves on to
+another (all 50 come up before any comes twice); every 15th wave is a boss. Each visit rolls its own take on the arena:
+where the pillars stand, the platforms, the raised squares, the sky. The arenas can't be broken. Each has a temporary
+shop near its edge, under a column of lights (the chat says which way): **Leave** on its Cyber Grind page takes
+everyone back to where they started. `/uc grind start` starts a run on your own, `/uc grind arena <1-50>` starts in
+that arena, `/uc grind stop` ends the run. With the setting off, the waves come round the shop you started
 from.
 
 ## Made with AI

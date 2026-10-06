@@ -640,7 +640,11 @@ namespace UltraBridge
                     if (originSet && o != origin)
                     {
                         ClearSections();
-                        OriginMoved();
+                        // "keep": the same world, only the origin moved along with V1 (floats stay precise near it), so
+                        // its enemies and bosses move with it instead of going
+                        bool keep = a.Length > 3 && a[3] == "keep";
+                        if (keep) ShiftActors(new Vector3(origin.x - o.x, origin.y - o.y, -(origin.z - o.z)) * K);
+                        OriginMoved(!keep);
                     }
                     origin = o;
                     originSet = true;

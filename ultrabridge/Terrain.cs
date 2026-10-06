@@ -89,7 +89,11 @@ namespace UltraBridge
                     continue;
                 }
                 if (!enemyProgress.TryGetValue(kv.Key, out var pr)) enemyProgress[kv.Key] = pr = new Stride { at = pos, since = Time.time };
-                bool wantsToGo = nma.hasPath && !nma.isStopped && nma.remainingDistance > K * 2.5f;
+                // or stranded: on a patch of navmesh it can't walk off (a wall top, a raised square, a ledge), its path
+                // ending at the patch's edge well short of where it wants to be
+                bool stranded = nma.hasPath && !nma.isStopped && nma.pathStatus == NavMeshPathStatus.PathPartial
+                    && nma.remainingDistance <= K * 2.5f && (nma.destination - pos).sqrMagnitude > K * K * 16f;
+                bool wantsToGo = stranded || (nma.hasPath && !nma.isStopped && nma.remainingDistance > K * 2.5f);
                 if (!wantsToGo || (pos - pr.at).sqrMagnitude > K * K * 0.25f)
                 {
                     pr.at = pos;
@@ -97,6 +101,28 @@ namespace UltraBridge
                     continue;
                 }
                 if (Time.time - pr.since < 2f) continue;
+                if (stranded)
+                {
+                    // down (or over) towards where it's going: the first ground ahead it can reach that way
+                    var dest = nma.destination;
+                    var to = dest - pos;
+                    to.y = 0f;
+                    var dir = to.normalized;
+                    for (int step = 1; step <= 6; step++)
+                    {
+                        var spot = pos + dir * (K * step * 1.5f);
+                        if (!NavMesh.SamplePosition(spot, out var hit, K * 5f, nma.areaMask)) continue;
+                        if (hit.position.y - pos.y > K * 2.3f || (hit.position - pos).sqrMagnitude < K * K * 1.5f) continue;
+                        var check = new NavMeshPath();
+                        if (!NavMesh.CalculatePath(hit.position, dest, nma.areaMask, check) || check.status != NavMeshPathStatus.PathComplete) continue;
+                        nma.Warp(hit.position);
+                        nma.SetDestination(dest);
+                        break;
+                    }
+                    pr.at = eid.transform.position;
+                    pr.since = Time.time;
+                    continue;
+                }
                 // stuck for two seconds: up onto the ground ahead (two blocks at most), towards where it's going
                 var ahead = nma.steeringTarget - pos;
                 ahead.y = 0f;

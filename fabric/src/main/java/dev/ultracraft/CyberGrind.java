@@ -65,6 +65,9 @@ final class CyberGrind {
 	private static boolean arenaMode, nextArenaDue;
 	private static int arenaIndex, wavesHere;
 	private static GrindArenas.Built arena;
+	/** This run's arenas, shuffled: each run starts somewhere new and goes through all of them before any comes back. */
+	private static final List<Integer> order = new ArrayList<>();
+	private static int orderPos;
 	/** Who came along, and where each goes back to. */
 	private record Return(ResourceKey<Level> level, Vec3 at, float yaw, float pitch) {}
 	private static final Map<UUID, Return> party = new HashMap<>();
@@ -130,7 +133,8 @@ final class CyberGrind {
 				}
 			}
 			hud("THE CYBER GRIND");
-			enterArena(0);
+			shuffle(-1);
+			enterArena(order.get(0));
 			sendState();
 			return;
 		}
@@ -139,7 +143,7 @@ final class CyberGrind {
 		sendState();
 	}
 
-	/** /uc grind arena n: a run in the Grind's arenas from arena index on, for this V1 alone. */
+	/** /uc grind start or arena n: a run in the Grind's arenas from arena index on (-1: any), for this V1 alone. */
 	static boolean startArenas(ServerPlayer sp, int index) {
 		if (running || !UcNet.isV1(sp)) return false;
 		server = sp.level().getServer();
@@ -153,9 +157,35 @@ final class CyberGrind {
 		party.clear();
 		party.put(sp.getUUID(), new Return(sp.level().dimension(), sp.position(), sp.getYRot(), sp.getXRot()));
 		hud("THE CYBER GRIND");
-		enterArena(index);
+		shuffle(index < 0 ? -1 : Math.floorMod(index, GrindArenas.ARENAS.size()));
+		enterArena(order.get(0));
 		sendState();
 		return true;
+	}
+
+	/** A new order of arenas for the run, first first (or any, for -1). */
+	private static void shuffle(int first) {
+		order.clear();
+		for (int i = 0; i < GrindArenas.ARENAS.size(); i++) order.add(i);
+		java.util.Collections.shuffle(order, new java.util.Random(server.overworld().getRandom().nextLong()));
+		if (first >= 0) {
+			order.remove(Integer.valueOf(first));
+			order.add(0, first);
+		}
+		orderPos = 0;
+	}
+
+	/** The arena after this one: the next in the order, or, once all have been, a new order (not this one again). */
+	private static int nextArena(boolean take) {
+		if (orderPos + 1 < order.size()) {
+			if (take) orderPos++;
+			return order.get(take ? orderPos : orderPos + 1);
+		}
+		if (!take) return -1;
+		int last = arenaIndex;
+		shuffle(-1);
+		if (order.get(0) == last) java.util.Collections.swap(order, 0, order.size() - 1);
+		return order.get(0);
 	}
 
 	/** Arena index, built fresh, with the party in it; its first wave after a few seconds. */
@@ -165,7 +195,8 @@ final class CyberGrind {
 		if (arena != null && arena.shop() != null) GrindArenas.removeShop(level, arena.shop(), arena.shopFacing());
 		arenaIndex = index;
 		wavesHere = 0;
-		arena = GrindArenas.build(level, index);
+		RandomSource random = server.overworld().getRandom();
+		arena = GrindArenas.build(level, index, random.nextLong());
 		center = arena.center();
 		shopId = arena.shop() != null ? arena.shop().asLong() : 0L;
 		countdown = 100;
@@ -186,7 +217,7 @@ final class CyberGrind {
 		}
 		hud("ARENA " + (index + 1) + ": " + arena.def().title());
 		// ULTRAKILL's own sky over it
-		String sky = "SKY " + GrindArenas.sky(index);
+		String sky = "SKY " + GrindArenas.sky(index, random);
 		for (UUID id : party.keySet()) {
 			ServerPlayer o = server.getPlayerList().getPlayer(id);
 			if (o != null) UcNet.send(o, sky);
@@ -221,7 +252,7 @@ final class CyberGrind {
 				if (nextArenaDue) {
 					// this arena is done: on to the next
 					nextArenaDue = false;
-					enterArena(arenaIndex + 1);
+					enterArena(nextArena(true));
 				} else {
 					startWave(sp);
 				}
@@ -261,12 +292,15 @@ final class CyberGrind {
 			budget -= k.cost;
 		}
 		left = 0;
+		StringBuilder log = new StringBuilder();
 		for (Kind k : spawn) {
 			Vec3 at = spot(level, random);
+			log.append(String.format(Locale.ROOT, " %s@%.0f,%.0f,%.0f", k.type, at.x, at.y, at.z));
 			double y = at.y + (k.flies ? 3.0 + random.nextInt(3) : 0.0);
 			UcNet.send(sp, String.format(Locale.ROOT, "SPAWNAT %s %.2f %.2f %.2f 2", k.type, at.x, y, at.z));
 			left++;
 		}
+		org.slf4j.LoggerFactory.getLogger("ultracraft").info("Cyber Grind wave {}:{}", wave, log);
 		hud("WAVE " + wave);
 		sendState();
 	}
@@ -277,7 +311,7 @@ final class CyberGrind {
 	 */
 	private static Vec3 spot(ServerLevel level, RandomSource random) {
 		double near = arenaMode ? 4.0 : 8.0, far = arenaMode && arena != null ? Math.max(8.0, arena.r() - 4.0) : 24.0;
-		for (int attempt = 0; attempt < 16; attempt++) {
+		for (int attempt = 0; attempt < 40; attempt++) {
 			double angle = random.nextDouble() * Math.PI * 2.0, dist = near + random.nextDouble() * (far - near);
 			int x = (int) Math.floor(center.x + Math.cos(angle) * dist), z = (int) Math.floor(center.z + Math.sin(angle) * dist);
 			BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, (int) Math.floor(center.y) + (arenaMode ? 3 : 6), z);
@@ -285,7 +319,11 @@ final class CyberGrind {
 				m.setY(y);
 				if (!level.getBlockState(m).isFaceSturdy(level, m, Direction.UP)) continue;
 				BlockPos feet = m.above();
-				if (level.noCollision(new AABB(feet.getX() + 0.1, feet.getY(), feet.getZ() + 0.1, feet.getX() + 0.9, feet.getY() + 3.0, feet.getZ() + 0.9))
+				// in the Grind's arenas, only on the floor itself (an enemy put on a wall, pillar, platform or raised
+				// square can't get down to V1), with room round it for the big ones
+				if (arenaMode && arena != null && !GrindArenas.standable(arena, x, z, y)) break;
+				double room = arenaMode ? 1.0 : 0.0;
+				if (level.noCollision(new AABB(feet.getX() + 0.1 - room, feet.getY(), feet.getZ() + 0.1 - room, feet.getX() + 0.9 + room, feet.getY() + 3.0, feet.getZ() + 0.9 + room))
 					&& level.getFluidState(feet).isEmpty()) {
 					return new Vec3(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
 				}
@@ -356,7 +394,9 @@ final class CyberGrind {
 			// the arena is cleared: the next one, once the party has had a breather
 			nextArenaDue = true;
 			countdown = 140;
-			hud(String.format(Locale.ROOT, "ARENA CLEARED  +%,d <color=#FF4343>P</color>  -  NEXT: %s", prize, GrindArenas.def(arenaIndex + 1).title()));
+			int next = nextArena(false);
+			hud(next < 0 ? String.format(Locale.ROOT, "ARENA CLEARED  +%,d <color=#FF4343>P</color>", prize)
+				: String.format(Locale.ROOT, "ARENA CLEARED  +%,d <color=#FF4343>P</color>  -  NEXT: %s", prize, GrindArenas.def(next).title()));
 		} else {
 			hud(String.format(Locale.ROOT, "WAVE %d CLEARED  +%,d <color=#FF4343>P</color>", wave, prize));
 		}

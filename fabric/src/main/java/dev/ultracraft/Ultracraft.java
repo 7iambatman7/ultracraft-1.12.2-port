@@ -88,6 +88,12 @@ public final class Ultracraft implements ClientModInitializer {
 		return UcNet.isV1(e);
 	}
 	private static boolean originSent;
+	/** Where (and in which dimension) ULTRAKILL's world origin is. */
+	private static net.minecraft.world.phys.Vec3 originAt;
+	private static net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> originDim;
+	/** A teleport further than this from the origin moves the origin along: ULTRAKILL's floats lose precision far
+	 * from its own origin (its HUD text and guns jitter and break up thousands of blocks out). */
+	private static final double REBASE = 1024.0;
 	private static BlockPos lastExport;
 	private static int tick;
 	private static int lastW, lastH;
@@ -698,9 +704,24 @@ public final class Ultracraft implements ClientModInitializer {
 	}
 
 	static void teleportV1(LocalPlayer p) {
+		boolean rebase = false;
+		if (originSent && originAt != null && (originDim != p.level().dimension()
+			|| Math.max(Math.abs(p.getX() - originAt.x), Math.abs(p.getZ() - originAt.z)) > REBASE || Math.abs(p.getY() - originAt.y) > REBASE)) {
+			// far from the origin (the Cyber Grind's arenas, another dimension, a long /tp): it moves here, and
+			// ULTRAKILL gets the terrain, water and shops around it afresh (its enemies and bosses stay put)
+			originSent = false;
+			rebase = true;
+			lastBlocks = null;
+			lastExport = null;
+			WorldMesh.reset();
+			Fluids.reset();
+			ShopExport.reset();
+		}
 		if (!originSent) {
-			UkLink.send(String.format(Locale.ROOT, "ORIGIN %.3f %.3f %.3f", p.getX(), p.getY(), p.getZ()));
+			UkLink.send(String.format(Locale.ROOT, "ORIGIN %.3f %.3f %.3f", p.getX(), p.getY(), p.getZ()) + (rebase ? " keep" : ""));
 			originSent = true;
+			originAt = p.position();
+			originDim = p.level().dimension();
 		}
 		exportBlocks(p.level() instanceof ClientLevel cl ? cl : null, p.blockPosition());
 		UkLink.send(String.format(Locale.ROOT, "TP %.3f %.3f %.3f %.2f %.2f", p.getX(), p.getY() + 0.05, p.getZ(), p.getYRot(), p.getXRot()));

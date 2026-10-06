@@ -139,18 +139,19 @@ final class GrindArenas {
 		java.util.Map.entry("PRIME SANCTUM", new String[] {"NightSky5", "SpaceSky"}),
 		java.util.Map.entry("HEAVEN", new String[] {"DawnSky", "EveningSky 3"}));
 
-	/** Arena index's sky: the address of one of ULTRAKILL's skybox materials. */
-	static String sky(int index) {
+	/** A sky for arena index: the address of one of its layer's ULTRAKILL skybox materials, picked at random. */
+	static String sky(int index, RandomSource random) {
 		Def d = def(index);
 		String[] all = SKIES.getOrDefault(d.layer, new String[] {"DuskSky"});
-		int n = 0;
-		for (int i = 0; i < Math.floorMod(index, ARENAS.size()); i++) if (ARENAS.get(i).layer.equals(d.layer)) n++;
-		String name = all[n % all.length];
+		String name = all[random.nextInt(all.length)];
 		return name.startsWith("../") ? "Assets/Materials/" + name.substring(3) + ".mat" : "Assets/Materials/Skyboxes/" + name + ".mat";
 	}
 
 	/** Where an arena was built: its middle (on the floor), its radius, where V1 lands, and its shop. */
 	record Built(Def def, Vec3 center, int r, Vec3 spawn, BlockPos shop, Direction shopFacing) {}
+
+	/** The arena standing now varies its raised squares by this (each build rolls its own). */
+	private static int salt;
 
 	private GrindArenas() {}
 
@@ -162,11 +163,15 @@ final class GrindArenas {
 		return ARENAS.get(Math.floorMod(index, ARENAS.size()));
 	}
 
-	/** Builds arena index (any damage from a last visit swept away first), with its temporary shop. */
-	static Built build(ServerLevel level, int index) {
+	/**
+	 * Builds arena index (any damage from a last visit swept away first), with its temporary shop. Seed rolls this
+	 * build's own take on it: where its pillars stand and how tall, its platforms, raised squares, floor and shop.
+	 */
+	static Built build(ServerLevel level, int index, long seed) {
 		Def d = def(index);
 		int ox = 1024 + Math.floorMod(index, ARENAS.size()) * SPACING, oz = 0;
-		RandomSource rnd = RandomSource.create(index * 7919L + 17);
+		RandomSource rnd = RandomSource.create(seed);
+		salt = rnd.nextInt();
 		int R = d.r;
 		clear(level, ox, oz, R + 8);
 		// the floor, with its underside tapering away into the void
@@ -213,6 +218,23 @@ final class GrindArenas {
 		Vec3 spawn = new Vec3(ox + 0.5, top(d, 0, sz) + 1, oz + sz + 0.5);
 		if (d.shape == Shape.RING) spawn = new Vec3(ox + 0.5, top(d, 0, (int) (R * 0.7)) + 1, oz + (int) (R * 0.7) + 0.5);
 		return new Built(d, center, R, spawn, shop, facing);
+	}
+
+	/**
+	 * Whether an enemy can stand at block column x z of arena b with its ground block at groundY: on the floor
+	 * itself (not a wall, pillar, platform or a raised square it couldn't climb down from), with floor all round
+	 * it, out of the moat and away from the edge, so it can walk everywhere V1 can.
+	 */
+	static boolean standable(Built b, int x, int z, int groundY) {
+		Def d = b.def();
+		int dx = x - (int) Math.floor(b.center().x), dz = z - (int) Math.floor(b.center().z);
+		if (groundY != top(d, dx, dz) || raise(d, dx, dz) >= 2) return false;
+		for (int i = -2; i <= 2; i++) for (int j = -2; j <= 2; j++) if (!inside(d, dx + i, dz + j)) return false;
+		if (d.hazard != Hazard.NONE) {
+			double dist = Math.sqrt(dx * dx + dz * dz);
+			if (dist > d.r * 0.5 - 2 && dist < d.r * 0.58 + 2) return false;
+		}
+		return true;
 	}
 
 	/** The temporary shop goes when the run leaves its arena. */
@@ -267,13 +289,15 @@ final class GrindArenas {
 			band = Math.max(0, Math.min(n, band));
 			y += d.tiers > 0 ? band : -band;
 		}
-		if (d.shape == Shape.GRID) {
-			// the Cyber Grind's raised squares, four by four, a few of them up a block or two
-			int cx = Math.floorDiv(dx, 4), cz = Math.floorDiv(dz, 4);
-			int h = Math.floorMod(cx * 73856093 ^ cz * 19349663, 11);
-			if (Math.abs(dx) > 4 || Math.abs(dz) > 4) y += h >= 9 ? 2 : h >= 7 ? 1 : 0;
-		}
-		return y;
+		return y + raise(d, dx, dz);
+	}
+
+	/** The Cyber Grind's raised squares, four by four, a few of them up a block or two (which, this build's roll). */
+	private static int raise(Def d, int dx, int dz) {
+		if (d.shape != Shape.GRID || (Math.abs(dx) <= 4 && Math.abs(dz) <= 4)) return 0;
+		int cx = Math.floorDiv(dx, 4), cz = Math.floorDiv(dz, 4);
+		int h = Math.floorMod(cx * 73856093 ^ cz * 19349663 ^ salt, 11);
+		return h >= 9 ? 2 : h >= 7 ? 1 : 0;
 	}
 
 	private static BlockState floorBlock(Def d, int dx, int dz, RandomSource rnd) {
@@ -330,9 +354,11 @@ final class GrindArenas {
 
 	private static void pillars(ServerLevel level, Def d, int ox, int oz, RandomSource rnd) {
 		int R = d.r;
+		// the ring of pillars turned and spread by the roll
+		double turn = rnd.nextDouble() * Math.PI * 2 / Math.max(1, d.pillars);
+		double ring = d.shape == Shape.RING ? R * (0.66 + rnd.nextDouble() * 0.08) : R * (0.36 + rnd.nextDouble() * 0.11);
 		for (int i = 0; i < d.pillars; i++) {
-			double a = i * Math.PI * 2 / d.pillars + Math.PI / d.pillars;
-			double ring = d.shape == Shape.RING ? R * 0.7 : R * 0.48;
+			double a = i * Math.PI * 2 / d.pillars + turn;
 			int cx = (int) Math.round(Math.cos(a) * ring), cz = (int) Math.round(Math.sin(a) * ring);
 			if (!inside(d, cx, cz)) continue;
 			int h = 6 + rnd.nextInt(5) + (d.roof ? 6 : 0);

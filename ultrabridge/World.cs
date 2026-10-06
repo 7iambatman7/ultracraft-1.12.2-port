@@ -161,6 +161,81 @@ namespace UltraBridge
                     Net.Send("CUTINFO sections=" + secs + " verts=" + verts + " textures=" + cutoutTex.Count + " used=" + string.Join(",", texs) + " sec=" + sections.Count + " queue=" + sectionQueue.Count);
                     break;
                 }
+                case "HEADSHOT":
+                {
+                    // debug: a revolver headshot on the nearest of ULTRAKILL's own enemies, hard enough to kill (a crit kill)
+                    var nm = levelPrepared ? MonoSingleton<NewMovement>.Instance : null;
+                    if (nm == null) break;
+                    EnemyIdentifier best = null;
+                    float bd = float.MaxValue;
+                    foreach (var e in FindObjectsOfType<EnemyIdentifier>())
+                    {
+                        if (e == null || e.dead || e.GetComponent<McProxy>() != null || e.GetComponentInParent<UkPuppet>() != null) continue;
+                        float d = (e.transform.position - nm.transform.position).sqrMagnitude;
+                        if (d < bd) { bd = d; best = e; }
+                    }
+                    if (best == null) { Plugin.Log.LogInfo("HEADSHOT none"); break; }
+                    GameObject head = null;
+                    foreach (var c in best.GetComponentsInChildren<Collider>()) if (c.CompareTag("Head")) { head = c.gameObject; break; }
+                    var gc = MonoSingleton<GunControl>.Instance;
+                    best.hitter = "revolver";
+                    best.DeliverDamage(head != null ? head : best.gameObject, (best.transform.position - nm.transform.position).normalized * 5000f,
+                        head != null ? head.transform.position : best.transform.position, 50f, true, 1f, gc != null ? gc.currentWeapon : null);
+                    Plugin.Log.LogInfo("HEADSHOT " + best.enemyType + " head=" + (head != null ? head.name : "none") + " dead=" + best.dead);
+                    break;
+                }
+                case "BLOODINFO":
+                {
+                    // debug: ULTRAKILL blood on screen now (splatters and blood particle systems, where they are from V1)
+                    var nm = levelPrepared ? MonoSingleton<NewMovement>.Instance : null;
+                    var from = nm != null ? nm.transform.position : Vector3.zero;
+                    var sb = new StringBuilder("BLOODINFO");
+                    int n = 0;
+                    foreach (var ps in FindObjectsOfType<ParticleSystem>())
+                    {
+                        if (ps == null || !ps.isPlaying || ps.particleCount == 0) continue;
+                        var root = ps.transform.root;
+                        string nm2 = ps.gameObject.name;
+                        bool blood = ps.GetComponentInParent<Bloodsplatter>() != null || nm2.IndexOf("blood", StringComparison.OrdinalIgnoreCase) >= 0
+                                     || root.name.IndexOf("gore", StringComparison.OrdinalIgnoreCase) >= 0 || nm2.IndexOf("chest", StringComparison.OrdinalIgnoreCase) >= 0;
+                        if (!blood) continue;
+                        if (n++ < 25)
+                            sb.Append(" | ").Append(nm2).Append(" in ").Append(root.name).Append(" n=").Append(ps.particleCount)
+                              .Append(" loop=").Append(ps.main.loop).Append(" t=").Append(ps.time.ToString("0.0")).Append(" at ").Append(((ps.transform.position - from) / K).ToString("F1"))
+                              .Append(" scale=").Append(ps.transform.lossyScale.x.ToString("0.0"));
+                    }
+                    sb.Insert(9, " playing=" + n);
+                    // drops hanging in the air: barely moving, more than half a block over whatever is below
+                    var buf = new ParticleSystem.Particle[512];
+                    var hang = new StringBuilder();
+                    int hanging = 0;
+                    foreach (var ps in FindObjectsOfType<ParticleSystem>())
+                    {
+                        if (ps == null || ps.particleCount == 0) continue;
+                        int c = ps.GetParticles(buf);
+                        bool worldSpace = ps.main.simulationSpace == ParticleSystemSimulationSpace.World;
+                        int here = 0;
+                        Vector3 sample = Vector3.zero, vel = Vector3.zero;
+                        for (int i = 0; i < c; i++)
+                        {
+                            var pos = worldSpace ? buf[i].position : ps.transform.TransformPoint(buf[i].position);
+                            if (buf[i].velocity.magnitude > 1.5f) continue;
+                            if (Physics.Raycast(pos, Vector3.down, 0.5f * K, 1 << 8, QueryTriggerInteraction.Ignore)) continue;
+                            if (here++ == 0) { sample = pos; vel = buf[i].velocity; }
+                        }
+                        if (here == 0) continue;
+                        hanging += here;
+                        Transform t = ps.transform;
+                        string path = t.name;
+                        for (int k = 0; k < 3 && t.parent != null; k++) { t = t.parent; path = t.name + "/" + path; }
+                        hang.Append(" || ").Append(path).Append(" x").Append(here).Append(" of ").Append(c).Append(" at ").Append(((sample - from) / K).ToString("F1"))
+                            .Append(" v=").Append(vel.ToString("F2")).Append(" sim=").Append(ps.main.simulationSpace).Append(" grav=").Append(ps.main.gravityModifierMultiplier.ToString("0.0"))
+                            .Append(" coll=").Append(ps.collision.enabled).Append(" playing=").Append(ps.isPlaying);
+                    }
+                    sb.Append(" ## hanging=").Append(hanging).Append(hang).Append(" ## v1 at ").Append(UkToMc(from).ToString("F1"));
+                    Plugin.Log.LogInfo(sb.ToString());
+                    break;
+                }
                 case "STAININFO":
                 {
                     // debug: ULTRAKILL's stain system and what went to Minecraft

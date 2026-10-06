@@ -47,6 +47,7 @@ namespace UltraBridge
             Application.runInBackground = true;
             new Harmony("dev.ultracraft.ultrabridge").PatchAll(typeof(Plugin).Assembly);
             MpFxPatches.Apply();
+            MobKnock.Apply();
             var go = new GameObject("UltraBridge");
             DontDestroyOnLoad(go);
             go.hideFlags = HideFlags.HideAndDontSave;
@@ -3590,6 +3591,8 @@ namespace UltraBridge
             // a touch that does nothing (the JumpStart's spark through the other limbs) isn't a hit in Minecraft
             if (dmg < 0.001f && !parry) return false;
             Bridge.I?.ReportDamage(p, dmg, head, fromExplosion, hitPoint, parry, by, fire);
+            // an enemy's swing, stomp or blast that would launch V1 launches the mob too
+            if (__instance.hitter == "enemy") Bridge.I?.KnockMob(p);
             if (p.type == "end_crystal") return false;
             // real ULTRAKILL blood where it was hit, sized like a Filth's: splatters, stains, and V1's blood healing
             // when close (the same amounts ULTRAKILL gives: 3 per pellet or blast, 1 per nail)

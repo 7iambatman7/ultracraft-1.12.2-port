@@ -78,9 +78,29 @@ public final class ServerOps {
 		return s != null && s.shopTouch;
 	}
 
+	/** Mobs ULTRAKILL's enemies sent flying, and the tick they were: no fall damage for them until they land. */
+	private static final Map<LivingEntity, Integer> FLUNG = new HashMap<>();
+
+	static void fling(LivingEntity le) {
+		le.fallDistance = 0;
+		FLUNG.put(le, ticks);
+	}
+
+	private static void landFlung() {
+		if (FLUNG.isEmpty()) return;
+		FLUNG.entrySet().removeIf(en -> {
+			LivingEntity le = en.getKey();
+			if (le.isRemoved() || !le.isAlive()) return true;
+			le.fallDistance = 0;
+			int age = ticks - en.getValue();
+			return (age > 5 && le.onGround()) || le.isInWater() || age > 600;
+		});
+	}
+
 	/** Every server tick: each V1's spawns, bosses and Cyber Grind. */
 	static void tick(MinecraftServer server) {
 		ticks++;
+		landFlung();
 		if (ticks % 10 == 0) guard("boss party", () -> BossParty.tick(server));
 		for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
 			State s = state(sp);
@@ -120,6 +140,7 @@ public final class ServerOps {
 	/** The world closed. */
 	static void reset() {
 		STATES.clear();
+		FLUNG.clear();
 		UcNet.clearServer();
 	}
 
@@ -256,6 +277,12 @@ public final class ServerOps {
 				// the OP Shop's blasts (up to 15 times the size) get a bigger cap
 				float power = Math.max(1f, Math.min(UltracraftConfig.opShop ? 32f : kind.equals("1") ? 16f : 10f, size));
 				level.explode(sp, null, V1_BLAST, x, y, z, power, false, blocks, ParticleTypes.EXPLOSION, ParticleTypes.EXPLOSION_EMITTER, BLAST_DEBRIS, SILENT);
+				if (kind.equals("e")) {
+					// an enemy's blast: the mobs it throws land without a fall
+					double r = power * 2.0;
+					for (LivingEntity le : level.getEntitiesOfClass(LivingEntity.class, new net.minecraft.world.phys.AABB(x - r, y - r, z - r, x + r, y + r, z + r),
+						m -> m.isAlive() && !(m instanceof Player))) fling(le);
+				}
 			}
 			case "HIT" -> {
 				// HIT x y z dx dy dz damage radius ax ay az [e]: a weapon struck a block
@@ -281,6 +308,15 @@ public final class ServerOps {
 				}
 			}
 			case "DMG" -> damage(sp, level, a);
+			case "MKNOCK" -> {
+				// MKNOCK id vx vy vz: one of ULTRAKILL's enemies launched this mob as it would launch V1 (its new speed,
+				// blocks a tick); it lands without a fall
+				if (level.getEntity(Integer.parseInt(a[1])) instanceof LivingEntity le && le.isAlive() && !(le instanceof Player)) {
+					le.setDeltaMovement(Double.parseDouble(a[2]), Double.parseDouble(a[3]), Double.parseDouble(a[4]));
+					le.hurtMarked = true;
+					fling(le);
+				}
+			}
 			case "WHIP" -> {
 				// WHIP id vx vy vz: V1's Whiplash reels this mob in (its speed in blocks a tick)
 				if (level.getEntity(Integer.parseInt(a[1])) instanceof LivingEntity le && le.isAlive() && !UcNet.isV1(le)) {
@@ -406,7 +442,11 @@ public final class ServerOps {
 		// burning gasoline sets it alight in Minecraft too (fire resistance, and mobs that don't burn, shrug it off)
 		if (fire && !le.fireImmune()) le.setRemainingFireTicks(Math.max(le.getRemainingFireTicks(), 60));
 		le.hurtServer(level, src, amount * 10f);
-		if (enemy != null) return;
+		if (enemy != null) {
+			// knocked about by one of ULTRAKILL's enemies: it lands without a fall
+			if (le.isAlive() && !(le instanceof Player)) fling(le);
+			return;
+		}
 		if (parry) {
 			// a parried mob is sent flying
 			Vec3 away = le.position().subtract(sp.position()).multiply(1, 0, 1).normalize();

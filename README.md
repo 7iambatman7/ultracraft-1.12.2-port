@@ -51,6 +51,9 @@ ULTRAKILL's enemies spawn in the dark, and which ones depends on where you are:
 - in the Nether, demons by biome: souls in soul sand valleys, flesh in crimson forests, industry in basalt deltas;
 - in the End, angels (Virtues, Powers, Providence).
 
+ULTRAKILL's enemies fight Minecraft's hostile mobs too. A swing, stomp, Virtue pillar or blast that would launch V1
+launches a mob just as far, and a mob knocked about by them takes no fall damage.
+
 **Arenas** generate in new parts of the world, one for each of ULTRAKILL's layers:
 - Prelude, Limbo, Lust, Gluttony, Greed, Wrath and Violence in the Overworld;
 - Heresy in the Nether;

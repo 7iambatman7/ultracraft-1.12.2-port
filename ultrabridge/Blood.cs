@@ -118,6 +118,28 @@ namespace UltraBridge
         static bool Prefix(Vector3 pos) => !Bridge.TooFarFromBody(pos);
     }
 
+    /// <summary>No blood hanging in the air: a splatter's weightless puffs (round drops with no gravity and nothing to
+    /// land on, under its head, limb and splatter gore) drift where they were thrown for a second or two, which over
+    /// Minecraft looks like blood stuck in mid-air after every kill, crits most of all. The spray that falls and stains
+    /// stays.</summary>
+    [HarmonyPatch(typeof(Bloodsplatter), "OnEnable")]
+    static class NoHangingBlood
+    {
+        static void Postfix(Bloodsplatter __instance)
+        {
+            if (!Bridge.AllWeapons) return;
+            foreach (var ps in __instance.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                if (ps == null || ps == __instance.part) continue;
+                if (ps.main.gravityModifierMultiplier != 0f || ps.collision.enabled) continue;
+                var em = ps.emission;
+                if (!em.enabled) continue;
+                em.enabled = false;
+                ps.Clear(false);
+            }
+        }
+    }
+
     /// <summary>ULTRAKILL's enemies die bloodier.</summary>
     [HarmonyPatch(typeof(EnemyIdentifier), nameof(EnemyIdentifier.Death), new[] { typeof(bool) })]
     static class DeathBurst

@@ -472,7 +472,7 @@ namespace UltraBridge
                 return " | gun " + p.weaponName + " active=" + p.gun.activeInHierarchy + " renderers=" + on + "/" + all + " pos=" + p.gun.transform.position.ToString("F1")
                        + " scale=" + p.gun.transform.lossyScale.ToString("F2") + " bounds=" + b.center.ToString("F1") + " size=" + b.size.ToString("F2")
                        + " hand=" + (p.hand != null ? p.hand.position.ToString("F1") : "none") + " body=" + p.transform.position.ToString("F1") + " layer=" + p.gun.layer
-                       + " center=" + p.gunCenter.ToString("F2");
+                       + " center=" + p.gunCenter.ToString("F2") + " pose=" + gunPoseNote;
             }
             return " | no gun";
         }
@@ -645,7 +645,8 @@ namespace UltraBridge
             for (int pass = 0; pass < 2; pass++)
                 foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true))
                     if (mb != null) try { DestroyImmediate(mb); } catch (Exception) { }
-            foreach (var an in go.GetComponentsInChildren<Animator>(true)) an.enabled = false;
+            var anims = go.GetComponentsInChildren<Animator>(true);
+            foreach (var an in anims) an.enabled = false;
             foreach (var col in go.GetComponentsInChildren<Collider>(true)) col.enabled = false;
             foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true)) { rb.isKinematic = true; rb.detectCollisions = false; }
             foreach (var au in go.GetComponentsInChildren<AudioSource>(true)) au.enabled = false;
@@ -660,6 +661,23 @@ namespace UltraBridge
             // ULTRAKILL keeps its gun prefabs switched off (equipping one switches it on)
             go.SetActive(true);
             holder.SetActive(true);
+            // posed as first person shows it: its animator's idle (left alone, a gun's bones sit in their bind pose,
+            // pointing anywhere), then held still
+            foreach (var an in anims)
+            {
+                if (an == null || an.runtimeAnimatorController == null) continue;
+                try
+                {
+                    an.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                    an.fireEvents = false;
+                    an.applyRootMotion = false;
+                    an.enabled = true;
+                    an.Rebind();
+                    for (int i = 0; i < 6; i++) an.Update(0.25f);
+                }
+                catch (Exception e) { Plugin.Log.LogDebug("held gun pose: " + e.Message); }
+                an.enabled = false;
+            }
             // its size, and where it is from our eye, as first person has it
             var b = new Bounds();
             bool any = false;
@@ -680,17 +698,22 @@ namespace UltraBridge
             go.transform.SetParent(null, true);
             go.transform.localScale *= scale;
             Destroy(holder);
-            // which way its barrel runs: its longest side, away from where its middle lies from its pivot (a
-            // first-person gun's pivot sits out by its muzzle end)
-            go.transform.rotation = Quaternion.identity;
-            var lb = new Bounds();
-            bool lany = false;
-            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            // as first person holds it (turned as the camera was): its barrel should run ahead, along z
+            go.transform.rotation = turn;
+            go.transform.position = Vector3.zero;
+            var lb = HeldBounds(go, out bool lany);
+            if (lany && cam != null && lb.size.z >= 0.8f * Mathf.Max(lb.size.x, lb.size.y))
             {
-                if (!r.enabled) continue;
-                if (!lany) { lb = r.bounds; lany = true; }
-                else lb.Encapsulate(r.bounds);
+                center = go.transform.InverseTransformPoint(lb.center);
+                length = lb.size.z;
+                gunPoseNote = "first person";
+                return go;
             }
+            // otherwise: its longest side, away from where its middle lies from its pivot (a first-person gun's pivot
+            // sits out by its muzzle end)
+            gunPoseNote = "longest side";
+            go.transform.rotation = Quaternion.identity;
+            lb = HeldBounds(go, out lany);
             if (lany)
             {
                 center = go.transform.InverseTransformPoint(lb.center);
@@ -702,6 +725,21 @@ namespace UltraBridge
                 turn = Quaternion.FromToRotation(dir, Vector3.forward);
             }
             return go;
+        }
+
+        string gunPoseNote = "-";
+
+        static Bounds HeldBounds(GameObject go, out bool any)
+        {
+            var b = new Bounds();
+            any = false;
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                if (!r.enabled) continue;
+                if (!any) { b = r.bounds; any = true; }
+                else b.Encapsulate(r.bounds);
+            }
+            return b;
         }
 
         /// <summary>Each frame, after the bodies' animation: V1's right arm reaches out where its player aims, and the

@@ -63,7 +63,8 @@ namespace UltraBridge
                     // STEVEPOS x y z: Steve's feet; V1's body (the enemies' target) stands there
                     var a = rest.Split(' ');
                     var nm = levelPrepared && originSet ? MonoSingleton<NewMovement>.Instance : null;
-                    if (!SteveView || nm == null || a.Length < 3) return true;
+                    // down in a boss fight: V1's body lies where it fell, not with the camera watching a teammate
+                    if (!SteveView || nm == null || a.Length < 3 || downed) return true;
                     var p = McToUk(new Vector3(F(a[0]), F(a[1]), F(a[2]))) + Vector3.up * 1.5f;
                     nm.transform.position = p;
                     nm.rb.position = p;

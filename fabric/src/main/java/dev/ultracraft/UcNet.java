@@ -168,9 +168,21 @@ public final class UcNet {
 		}
 	}
 
+	/** Our ULTRAKILL sends what its V1 and its game do only while other players are V1 (PEERS n). */
+	private static void sendPeers(String list) {
+		var me = Minecraft.getInstance().player;
+		int others = 0;
+		for (String u : list.split(",")) if (!u.isBlank() && (me == null || !me.getUUID().toString().equals(u.trim()))) others++;
+		UkLink.send("PEERS " + others);
+	}
+
 	/** C:V1S uuid,uuid,...: who is V1 now. */
 	static void clientV1s(String list) {
 		CLIENT_V1.clear();
+		try {
+			sendPeers(list);
+		} catch (RuntimeException ignored) {
+		}
 		for (String s : list.split(",")) {
 			if (s.isEmpty()) continue;
 			try {

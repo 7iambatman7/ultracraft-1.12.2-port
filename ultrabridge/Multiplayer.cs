@@ -45,6 +45,45 @@ namespace UltraBridge
                 case "PUPS":
                     ApplyPuppets(rest);
                     break;
+                case "PEERS":
+                    // PEERS n: other players who are V1 (only then do we send what our V1 and our game do)
+                    mpPeers = int.Parse(rest.Trim());
+                    break;
+                case "RV1":
+                    HandleRemoteV1(rest);
+                    break;
+                case "RFX":
+                    HandleRemoteFx(rest);
+                    break;
+                case "DOWNED":
+                    downed = rest.Trim().StartsWith("1");
+                    Plugin.Log.LogInfo(downed ? "V1 is down: watching a teammate" : "V1 is back up");
+                    break;
+                case "PREFAB":
+                {
+                    // debug: PREFAB name - is that prefab loaded here, and what's loaded like it
+                    var name = rest.Trim();
+                    var found = Prefab(name);
+                    var sb = new StringBuilder("MPINFO prefab " + name + " found=" + (found != null) + " total=" + prefabs.Count + " like:");
+                    int n = 0;
+                    foreach (var k in prefabs.Keys) if (n < 12 && k.IndexOf(name.Split(' ')[0], StringComparison.OrdinalIgnoreCase) >= 0) { sb.Append(" [").Append(k).Append(']'); n++; }
+                    Net.Send(sb.ToString());
+                    break;
+                }
+                case "MPLOOP":
+                {
+                    // debug: our own V1 and effects shown back to us on a stand-in teammate in front
+                    var nm = levelPrepared ? MonoSingleton<NewMovement>.Instance : null;
+                    if (nm != null) StartLoop(nm);
+                    break;
+                }
+                case "CLICK":
+                    // debug: CLICK seconds - hold the fire button that long
+                    forceClickUntil = Time.unscaledTime + F(rest.Trim());
+                    break;
+                case "MPINFO":
+                    Net.Send(MpInfo());
+                    break;
                 case "EHIT":
                 {
                     // EHIT id damage head explosion: another player's shot, through this enemy's puppet in their game
@@ -267,10 +306,27 @@ namespace UltraBridge
                 {
                     var v = p.velocity;
                     p.v1Anim.SetBool("Running", new Vector2(v.x, v.z).magnitude > 2f * K);
-                    p.v1Anim.SetBool("InAir", Mathf.Abs(v.y) > 2f * K);
+                    // in the air as their own ULTRAKILL has it (Minecraft's movement comes in ticks: going by it, the
+                    // jump started over and over)
+                    p.v1Anim.SetBool("InAir", p.remoteKnown ? !p.remoteGrounded : Mathf.Abs(v.y) > 2f * K);
+                    if (HasParam(p.v1Anim, "Sliding")) p.v1Anim.SetBool("Sliding", p.remoteSliding);
                 }
                 if (Time.frameCount % 10 == 0) LightUp(p.v1Body.gameObject, LightNear(p.transform.position), 0.5f);
             }
+        }
+
+        static readonly Dictionary<Animator, HashSet<string>> animParams = new Dictionary<Animator, HashSet<string>>();
+
+        static bool HasParam(Animator a, string name)
+        {
+            if (!animParams.TryGetValue(a, out var set))
+            {
+                set = new HashSet<string>();
+                foreach (var p in a.parameters) set.Add(p.name);
+                animParams[a] = set;
+                Plugin.Log.LogInfo("V1 body animator: " + string.Join(", ", set));
+            }
+            return set.Contains(name);
         }
 
         // ------------------------------------------------------------ other V1s

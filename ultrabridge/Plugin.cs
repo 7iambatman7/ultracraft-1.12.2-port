@@ -46,6 +46,7 @@ namespace UltraBridge
             Log = Logger;
             Application.runInBackground = true;
             new Harmony("dev.ultracraft.ultrabridge").PatchAll(typeof(Plugin).Assembly);
+            MpFxPatches.Apply();
             var go = new GameObject("UltraBridge");
             DontDestroyOnLoad(go);
             go.hideFlags = HideFlags.HideAndDontSave;
@@ -89,6 +90,20 @@ namespace UltraBridge
         public float yaw;
         public Transform v1Body;
         public Animator v1Anim;
+        // how that player's own ULTRAKILL has their V1 (RV1): on the ground, sliding, looking up or down, the gun out
+        public bool remoteKnown, remoteGrounded, remoteSliding;
+        public float pitch;
+        public string weaponName;
+        public GameObject gun;
+        public Transform hand;
+        // how ULTRAKILL turns that gun in V1's hands (its prefab's own turn under the camera)
+        public Quaternion gunTurn = Quaternion.identity;
+        // where that gun sits from the eye, as ULTRAKILL lays it out in first person (scaled to the body)
+        public Vector3 gunFromEye;
+        // the gun's middle in its own space, and the right arm's bones that hold it out
+        public Vector3 gunCenter;
+        public float gunLength;
+        public Transform upperArm, foreArm;
         Vector3 cachedPos, cachedHead;
 
         public int Id => GetInstanceID();
@@ -286,6 +301,7 @@ namespace UltraBridge
         int maskBpp = 4;
         int lastHp = -1;
         float nextLoadingNote;
+        float forceClickUntil;
         internal static readonly bool LaunchedForMinecraft = Array.IndexOf(Environment.GetCommandLineArgs(), "-ultracraft") >= 0;
 
         /// <summary>-ucinstance N: a second (third...) Ultracraft on the same computer (testing multiplayer alone) uses
@@ -456,6 +472,7 @@ namespace UltraBridge
                 }
                 KeepHands();
                 KeepGunOut();
+                UpdateMpSync(nm);
                 KeepCheats();
                 UpdateMusic();
                 UpdateStyleRank();
@@ -2892,7 +2909,19 @@ namespace UltraBridge
                 var feet = McToUk(new Vector3(F(a[2]), F(a[3]), F(a[4])));
                 float w = F(a[5]) * K, h = F(a[6]) * K, eye = F(a[7]) * K;
                 float hp = F(a[8]), maxHp = F(a[9]);
-                if (!proxies.TryGetValue(id, out var p) || p == null)
+                if (proxies.TryGetValue(id, out var p) && p != null && p.type != a[1])
+                {
+                    // the same entity as something else now: a player who became V1 (V1's body, not a hidden box) or
+                    // went back to Steve. Made anew; kept as it was, a player who joined as Steve never showed as V1.
+                    if (p.eid != null)
+                    {
+                        p.eid.dead = true;
+                        MonoSingleton<EnemyTracker>.Instance?.GetCurrentEnemies().Remove(p.eid);
+                    }
+                    Destroy(p.gameObject);
+                    p = null;
+                }
+                if (p == null)
                 {
                     p = MakeProxy(id, a[1], w, h, eye);
                     proxies[id] = p;
@@ -2910,7 +2939,8 @@ namespace UltraBridge
                 if (p.eid != null) p.eid.health = hp / 10f;
             }
             var gone = new List<int>();
-            foreach (var kv in proxies) if (!seen.Contains(kv.Key)) gone.Add(kv.Key);
+            // (negative ids: debug stand-ins of our own, not Minecraft's)
+            foreach (var kv in proxies) if (!seen.Contains(kv.Key) && kv.Key >= 0) gone.Add(kv.Key);
             foreach (var id in gone)
             {
                 var p = proxies[id];
@@ -3039,7 +3069,11 @@ namespace UltraBridge
             var nm = levelPrepared ? MonoSingleton<NewMovement>.Instance : null;
             // V1 is alive and in control: its CameraController must be running (it is what turns the view)
             if (cc != null && nm != null && v1Landed && !nm.dead && !cc.enabled) cc.enabled = true;
-            if (cc != null && opm != null && cc.activated && mouseDelta != Vector2.zero)
+            // ULTRAKILL's weapon wheel (hold Q): the camera holds still and the mouse picks a weapon instead (its
+            // WheelLook reads the mouse's own movement, which otherwise stays at zero here)
+            var ww = levelPrepared ? MonoSingleton<WeaponWheel>.Instance : null;
+            bool wheelOpen = ww != null && ww.gameObject.activeInHierarchy;
+            if (cc != null && opm != null && cc.activated && mouseDelta != Vector2.zero && !wheelOpen)
             {
                 // ULTRAKILL's own look math: Look = <Mouse>/delta * 0.05, then * sensitivity/10, slower while zoomed
                 bool zooming = CamZooming(cc);
@@ -3056,7 +3090,8 @@ namespace UltraBridge
                     cc.ApplyRotations();
                 }
             }
-            var ms = new MouseState { position = pointer, delta = Vector2.zero, scroll = new Vector2(0, wheel), buttons = (ushort)buttons };
+            var ms = new MouseState { position = pointer, delta = wheelOpen ? mouseDelta : Vector2.zero, scroll = new Vector2(0, wheel),
+                buttons = (ushort)(buttons | (Time.unscaledTime < forceClickUntil ? 1 : 0)) };
             InputSystem.QueueStateEvent(mouse, ms);
             mouseDelta = Vector2.zero;
             wheel = 0;
@@ -3115,6 +3150,7 @@ namespace UltraBridge
             if (!levelPrepared) return;
             UpdateSteveCamera();
             UpdateSelfBody();
+            PlaceRemoteGuns();
             PoseDollHead();
             var pp = MonoSingleton<PostProcessV2_Handler>.Instance;
             var vc = pp != null ? pp.virtualCam : null;

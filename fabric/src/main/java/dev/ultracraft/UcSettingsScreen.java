@@ -208,6 +208,8 @@ public final class UcSettingsScreen extends OptionsSubScreen {
 			slider("ULTRAKILL FPS Cap", "How many frames a second ULTRAKILL draws. Match Minecraft (the far left) keeps it in step with Minecraft's own frame limit, the smoothest. It shares the graphics card with Minecraft: a lower cap leaves Minecraft more.",
 				2, 24, UltracraftConfig.ukFps == 0 ? 2 : UltracraftConfig.ukFps / 10, v -> v == 2 ? "Match Minecraft" : v * 10 + " FPS",
 				v -> UltracraftConfig.ukFps = v == 2 ? 0 : v * 10),
+			bool("Frame Lock Step", "Minecraft waits for each of ULTRAKILL's frames, so the two always match: the smoothest when ULTRAKILL keeps up. When it can't (it stops waiting by itself for a few seconds then), or if the game stutters, turn this off.",
+				UltracraftConfig.lockStep, v -> UltracraftConfig.lockStep = v),
 			bool("Low-Latency Frames", "ULTRAKILL hands each frame to Minecraft as soon as it's drawn, rather than a frame or two later: less input lag. On a slow graphics card, off may give a few more frames a second.",
 				UltracraftConfig.lowLatency, v -> UltracraftConfig.lowLatency = v));
 	}

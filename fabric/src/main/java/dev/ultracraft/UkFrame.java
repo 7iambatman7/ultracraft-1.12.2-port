@@ -201,9 +201,21 @@ public final class UkFrame {
 	 * is the same picture again, and one that lands while Minecraft is busy skips one: at two frame rates side by side
 	 * that's a regular hitch. In lock step every ULTRAKILL frame is shown once, as soon as it's there.
 	 */
+	/**
+	 * Lock step only while ULTRAKILL keeps up. Missing its frame over and over (a slower computer, or Minecraft capped
+	 * faster than ULTRAKILL can go) turned every other frame into a wait that timed out: uneven frames, a stutter worse
+	 * than a steady lower rate. Then Minecraft stops waiting for a few seconds and draws ULTRAKILL's latest frame.
+	 */
+	private static int recentFrames, recentLate;
+	private static long freeRunUntil;
+
 	public static void waitForNext() {
 		locked = false;
 		if (color == null || map == null || !fresh() || !(Ultracraft.active || Ultracraft.steveDrawn)) return;
+		if (!UltracraftConfig.lockStep || System.nanoTime() < freeRunUntil) {
+			Ultracraft.sendInputEarly();
+			return;
+		}
 		locked = true;
 		pingClock();
 		long start = System.nanoTime();
@@ -216,6 +228,7 @@ public final class UkFrame {
 			long now = System.nanoTime();
 			if (now >= deadline) {
 				lockTimeouts++;
+				recentLate++;
 				break;
 			}
 			// keep the window answering while waiting (the wait is a few milliseconds at most)
@@ -228,6 +241,14 @@ public final class UkFrame {
 		// the input for ULTRAKILL's next frame, while it's between frames
 		Ultracraft.sendInputEarly();
 		long end = System.nanoTime();
+		if (++recentFrames >= 60) {
+			// more than one frame in five late: ULTRAKILL can't keep up right now
+			if (recentLate > 12) {
+				freeRunUntil = end + 4_000_000_000L;
+				LOG.info("[frames] ULTRAKILL missed {} of the last 60 frames: not waiting for it for a few seconds", recentLate);
+			}
+			recentFrames = recentLate = 0;
+		}
 		lockFrames++;
 		lockWaitNs += end - start;
 		if (lockStatsAt == 0) lockStatsAt = end;

@@ -81,6 +81,7 @@ public final class ServerOps {
 	/** Every server tick: each V1's spawns, bosses and Cyber Grind. */
 	static void tick(MinecraftServer server) {
 		ticks++;
+		if (ticks % 10 == 0) guard("boss party", () -> BossParty.tick(server));
 		for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
 			State s = state(sp);
 			// the Never Hungry cheat (as Steve too)
@@ -190,7 +191,9 @@ public final class ServerOps {
 				CyberGrind.sendState(sp);
 			}
 			case "DEAD" -> {
-				// V1 died in ULTRAKILL: Minecraft's player dies too (respawn goes through Minecraft)
+				// V1 died in ULTRAKILL: Minecraft's player dies too (respawn goes through Minecraft); in a boss fight
+				// with a teammate still standing, only down (BossParty)
+				if (BossParty.tryDown(sp)) return;
 				CyberGrind.stopIfRunner(sp, "V1 died");
 				UkBosses.stop(sp, "V1 died");
 				sp.kill(level);
@@ -325,6 +328,13 @@ public final class ServerOps {
 				UkProgress p = UkProgress.get(sp);
 				p.add(Integer.parseInt(a[1].trim()));
 				p.sendMoney();
+			}
+			case "V1STATE", "FX" -> {
+				// how this V1 stands and what its game spawned: for every other player near enough to see it
+				String out = (cmd.equals("FX") ? "RFX " : "RV1 ") + sp.getId() + " " + rest;
+				for (ServerPlayer o : server.getPlayerList().getPlayers()) {
+					if (o != sp && o.level() == sp.level() && o.distanceToSqr(sp) < 160 * 160) UcNet.send(o, out);
+				}
 			}
 			case "GEARADD" -> {
 				String gear = rest.trim();

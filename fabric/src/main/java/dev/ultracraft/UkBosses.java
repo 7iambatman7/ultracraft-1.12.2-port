@@ -132,6 +132,18 @@ final class UkBosses {
 		return phase != Phase.IDLE;
 	}
 
+	/** A boss is here, fighting. */
+	static boolean fighting() {
+		return phase == Phase.FIGHT;
+	}
+
+	/** End the fight whoever it was for (BossParty: everyone is down). */
+	static void forceEnd(net.minecraft.server.MinecraftServer server, String why) {
+		ServerPlayer t = target(server);
+		if (t != null) stop(t, why);
+		else reset();
+	}
+
 	/**
 	 * Every 10 ticks while V1 is active. playing: the player is at the keyboard (moved, looked or pressed something
 	 * in the last minute) and in the game, not a menu.
@@ -423,6 +435,8 @@ final class UkBosses {
 
 	/** The fight is over (won, lost, left): the sun comes back. */
 	private static void endEffects() {
+		// whoever went down in it gets back up
+		BossParty.reviveAll();
 		if (themeFor != null) UcNet.send(themeFor, "C:THEME -");
 		themeFor = null;
 		arenaLayer = null;
@@ -568,6 +582,7 @@ final class UkBosses {
 
 	/** Forget a fight without a player to tell (the world closed). */
 	static void reset() {
+		BossParty.reset();
 		endEffects();
 		phase = Phase.IDLE;
 		boss = null;

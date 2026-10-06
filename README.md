@@ -100,7 +100,11 @@ Everyone plays with their own ULTRAKILL (it starts by itself when Minecraft does
 - Or **Open to LAN** from the pause menu (same network, or with a tunnel such as playit.gg).
 
 You share the world and the fight: each player's ULTRAKILL runs the enemies around them, and the others see and hit
-them too. Other players show up as V1. Each player has their own P, gear and upgrades.
+them too. Other players show up as V1, holding the gun they have out, and you see and hear what they do: their beams,
+projectiles, explosions and shots. Each player has their own P, gear and upgrades.
+
+Bosses go after every V1 nearby. Die in a boss fight while a teammate fights on and you're only down: you watch them
+until the boss is beaten, then you're back on your feet beside them. Only when everyone is down does the boss leave.
 
 ## Controls
 

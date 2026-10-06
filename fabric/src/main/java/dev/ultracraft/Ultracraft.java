@@ -276,6 +276,8 @@ public final class Ultracraft implements ClientModInitializer {
 		StringBuilder sb = null;
 		for (Entity e : mc.level.entitiesForRendering()) {
 			if (e == self || !(e instanceof LivingEntity le) || !le.isAlive() || e instanceof UkEnemyEntity) continue;
+			// a downed teammate watching the fight isn't there to be seen or hit
+			if (e instanceof net.minecraft.world.entity.player.Player pl && pl.isSpectator()) continue;
 			if (e.distanceToSqr(self) > 80 * 80) continue;
 			Vec3 at = e.getPosition(dt.getGameTimeDeltaPartialTick(!rates.isEntityFrozen(e)));
 			Vec3 was = mobsDrawn.put(e.getId(), at);
@@ -430,7 +432,7 @@ public final class Ultracraft implements ClientModInitializer {
 		String msg;
 		while ((msg = UkLink.INBOX.poll()) != null) handle(mc, msg);
 		while (toggle.consumeClick()) {
-			if (UkLink.ready) {
+			if (UkLink.ready && !downed) {
 				active = !active;
 				if (active) begin(mc);
 				else end(mc);
@@ -619,6 +621,37 @@ public final class Ultracraft implements ClientModInitializer {
 		}
 	}
 
+	/** Down in a boss fight (BossParty): watching a teammate, with ULTRAKILL drawing the fight from that view. */
+	static boolean downed;
+
+	static void setDowned(Minecraft mc, boolean on, boolean dead) {
+		if (on == downed) return;
+		downed = on;
+		if (on) {
+			setUiMode(mc, false);
+			setFrozen(mc, false);
+			Movement.reset();
+			active = false;
+			steveView = true;
+			UkLink.send("STEVE 1");
+			UkLink.send("DOWNED 1");
+		} else {
+			UkLink.send("DOWNED 0");
+			if (dead) {
+				// the fight was lost: dead like everyone; V1 comes back with Minecraft's respawn, as after any death
+				steveView = false;
+				UkLink.send("STEVE 0");
+				active = true;
+				return;
+			}
+			// back up: V1 again, right where Minecraft put us
+			UkLink.send("RESPAWN");
+			active = true;
+			begin(mc);
+			UkLink.send("HUD <color=#FFD040>BACK ON YOUR FEET</color>");
+		}
+	}
+
 	/** Become V1 or Steve (F8). */
 	static void setActive(Minecraft mc, boolean on) {
 		if (on == active || (on && !UkLink.ready)) return;
@@ -700,7 +733,7 @@ public final class Ultracraft implements ClientModInitializer {
 			UcNet.toServer(msg);
 		} else if (msg.startsWith("UI ")) {
 			setUiMode(mc, msg.endsWith("1"));
-		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED|SPAWNABLES|MUSICINFO|ARMINFO|COMBATTEST|GUNINFO) .*")) {
+		} else if (msg.matches("^(SHOPINFO|SUNINFO|PUSHINFO|NUKETEST|SPAWNED|MOVEINFO|WATERINFO|GROUND|LIGHTINFO|STAININFO|BOSSINFO|GEARINFO|BOSSSPAWNED|SHOPPRESSED|CUTINFO|FXINFO|PUPINFO|BINDINFO|SHOPRQ|FRAMESNAPPED|SPAWNABLES|MUSICINFO|ARMINFO|COMBATTEST|GUNINFO|MPINFO) .*")) {
 			// debug answers (DebugCommands "uk ...")
 			org.slf4j.LoggerFactory.getLogger("ultracraft").info("[uk] {}", msg);
 		} else if (msg.startsWith("SHOPZONE ")) {
@@ -740,11 +773,13 @@ public final class Ultracraft implements ClientModInitializer {
 
 	/** ULTRAKILL's messages that act on the world, handled by the server (ServerOps). */
 	private static final java.util.regex.Pattern SERVER_OPS = java.util.regex.Pattern.compile(
-		"^(SLAM|RAIL|BOOM|HIT|FIRE|DMG|WHIP|PIMPACT|PHOLD|PRELEASE|PARRY|PEARN|PADD|GEARADD|UPBUY|BOSSPOS|BOSSDEAD|BOSSGONE|GRIND|SPAWNS|UKDEAD|UKDIE|PHIT|SHURT|EQUIP|NOSPAWN|STYLE) ");
+		"^(V1STATE|FX|SLAM|RAIL|BOOM|HIT|FIRE|DMG|WHIP|PIMPACT|PHOLD|PRELEASE|PARRY|PEARN|PADD|GEARADD|UPBUY|BOSSPOS|BOSSDEAD|BOSSGONE|GRIND|SPAWNS|UKDEAD|UKDIE|PHIT|SHURT|EQUIP|NOSPAWN|STYLE) ");
 
 	/** A line from the server for our Minecraft side ("C:..." in UcNet), on the client thread. */
 	static void fromServer(String msg) {
-		if (msg.startsWith("V1S ")) {
+		if (msg.startsWith("DOWNED ")) {
+			setDowned(Minecraft.getInstance(), msg.startsWith("DOWNED 1"), msg.endsWith("dead"));
+		} else if (msg.startsWith("V1S ")) {
 			UcNet.clientV1s(msg.substring(4));
 		} else if (msg.startsWith("PGAIN ")) {
 			UkProgress.gained(Integer.parseInt(msg.substring(6).trim()));

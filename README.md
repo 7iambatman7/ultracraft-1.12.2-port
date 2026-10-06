@@ -8,16 +8,27 @@ You need to own **ULTRAKILL** (Steam) and **Minecraft Java Edition**. Windows on
 
 ## Install
 
-1. **BepInEx 5** (x64) into ULTRAKILL: download `BepInEx_win_x64_5.4.x.zip` from
-   https://github.com/BepInEx/BepInEx/releases, unzip it into the ULTRAKILL folder
-   (Steam → ULTRAKILL → Manage → Browse local files), start ULTRAKILL once, then close it.
-2. From this repository's **Releases**, download `Ultracraft.zip`:
-   - put `UltraBridge.dll` in `ULTRAKILL/BepInEx/plugins/UltraBridge/`
-   - put `ultracraft-x.y.z.jar` in your Minecraft `mods` folder
-3. Install **Fabric Loader** for Minecraft **1.21.11** (https://fabricmc.net/use/installer/) and put
-   **Fabric API** for 1.21.11 (https://modrinth.com/mod/fabric-api) in the same `mods` folder.
-4. Start Steam, then start Minecraft with the Fabric profile. ULTRAKILL starts by itself (and closes with
-   Minecraft); open a world and you become V1 (F8 toggles back to Steve).
+You don't install anything into ULTRAKILL yourself. When Minecraft starts, Ultracraft finds ULTRAKILL through Steam and
+sets it up: it adds BepInEx 5 if ULTRAKILL doesn't have it yet, and the UltraBridge plugin, updated with every new
+version of the mod. A toast on the title screen says what it did. Have Steam running.
+
+**Easiest: the modpack.** From this repository's **Releases**:
+- **Modrinth App**: download `Ultracraft.mrpack`, then *Add an instance → Import from file*. You get Ultracraft, Fabric
+  API, Sodium and Essential.
+- **CurseForge App**: download `Ultracraft-CurseForge.zip`, then *Create Custom Profile → Import*. Same mods, plus
+  Essential Tweaks, which unbinds Essential's keys so they don't clash with ULTRAKILL's.
+
+Play that instance. ULTRAKILL starts by itself (and closes with Minecraft); open a world and you become V1 (F8 toggles
+back to Steve).
+
+**Or by hand:** install **Fabric Loader** for Minecraft **1.21.11** (https://fabricmc.net/use/installer/), and put
+**Fabric API** for 1.21.11 (https://modrinth.com/mod/fabric-api) and `ultracraft-x.y.z.jar` (from `Ultracraft.zip` in
+the Releases) in your `mods` folder.
+
+ULTRAKILL not found (installed somewhere unusual)? Put its folder in `config/ultracraft.properties` as
+`ultrakillDir=D:\\Games\\ULTRAKILL` (double backslashes). It already has BepInEx 6? Ultracraft needs BepInEx 5. Still
+stuck: unzip BepInEx 5 (x64, https://github.com/BepInEx/BepInEx/releases) into the ULTRAKILL folder yourself, and put
+`UltraBridge.dll` from `Ultracraft.zip` in `ULTRAKILL/BepInEx/plugins/UltraBridge/`.
 
 Commands: `/uc help`.
 

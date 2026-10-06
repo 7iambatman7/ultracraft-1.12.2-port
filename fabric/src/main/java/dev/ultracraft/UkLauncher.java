@@ -6,6 +6,8 @@ import java.io.InputStreamReader;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
+import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,7 +15,8 @@ import org.slf4j.LoggerFactory;
  * Minecraft started from the normal launcher brings ULTRAKILL along: as soon as Minecraft is up, ULTRAKILL starts
  * through Steam with -ultracraft (its window hidden, the Sandbox loading in the background, waiting for a world), and
  * closing Minecraft closes the ULTRAKILL it started. An ULTRAKILL already running is used as it is. The "Start
- * ULTRAKILL" setting (or -Dultracraft.noLaunch, which the test launcher passes) turns this off.
+ * ULTRAKILL" setting (or -Dultracraft.noLaunch, which the test launcher passes) turns this off. First, ULTRAKILL gets
+ * its half of Ultracraft (UkInstaller: BepInEx and the UltraBridge plugin), with a toast saying what was done.
  */
 final class UkLauncher {
 	private static final Logger LOG = LoggerFactory.getLogger("ultracraft");
@@ -22,7 +25,11 @@ final class UkLauncher {
 	private UkLauncher() {}
 
 	static void register() {
-		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> launch());
+		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> {
+			UkInstaller.Result r = UkInstaller.install();
+			if (r != null) SystemToast.add(mc.getToastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION, Component.literal(r.title()), Component.literal(r.detail()));
+			launch();
+		});
 		ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> close());
 	}
 

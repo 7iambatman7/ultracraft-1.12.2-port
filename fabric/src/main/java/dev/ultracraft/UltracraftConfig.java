@@ -69,6 +69,8 @@ public final class UltracraftConfig {
 	public static final Map<String, Integer> ukBinds = new TreeMap<>();
 	/** The ULTRAKILL song for fights: "off", "random", or a song of its soundtrack ("Levels/Act 1/Limbo/Versus.asset"). */
 	public static String fightMusic = "random";
+	/** Where ULTRAKILL is, when Ultracraft can't find it through Steam (empty: found by itself). */
+	public static String ultrakillDir = "";
 	/** Bosses (and arenas) bring their own ULTRAKILL song where they have one. */
 	public static boolean bossThemes = true;
 	/** Between fights the song's calm version plays (where ULTRAKILL has one); otherwise ULTRAKILL's music is quiet. */
@@ -99,7 +101,7 @@ public final class UltracraftConfig {
 	private static final String[] KEYS = {"v1Height", "autoV1", "ukSpawns", "mcMobs", "sharpShop", "grindBest", "bosses", "bossMinutes", "bossDifficulty", "traitChance", "bossWarnSeconds",
 		"allGear", "playerBlockDamage", "enemyBlockDamage", "impactFrames", "launchUltrakill", "opShop", "ukFpsCap", "steveEnemies", "fightMusic", "bossThemes",
 		"calmMusic", "hushMcMusic", "styleRewards", "arenas", "grindArenas", "lockStep", "lowLatency",
-		"effects", "stainCap", "extraGore", "terrainRange"};
+		"effects", "stainCap", "extraGore", "terrainRange", "ultrakillDir"};
 
 	private static final String COMMENT = "Ultracraft (most of this is on the Ultracraft settings screen): v1Height = ULTRAKILL render height (0 = full window, lower = faster);"
 		+ " autoV1 = become V1 automatically; ukSpawns = ULTRAKILL's enemies spawn in the dark; mcMobs = Minecraft's monsters spawn;"
@@ -108,7 +110,8 @@ public final class UltracraftConfig {
 		+ " playerBlockDamage / enemyBlockDamage = V1's / enemies' attacks break blocks; impactFrames = hitstop length (0.1 to 3);"
 		+ " launchUltrakill = start ULTRAKILL with Minecraft; opShop = upgrades go to 1500%; uk.* = ULTRAKILL settings used while playing Ultracraft;"
 		+ " fightMusic = off, random or a song of ULTRAKILL's soundtrack; cheat.* = cheats on; arenas = ULTRAKILL arenas generate in new chunks; grindArenas = the Cyber Grind runs through its own 50 arenas; lockStep = Minecraft waits for ULTRAKILL's frames;"
-		+ " effects = 2 high, 1 medium, 0 low; stainCap = blood stains kept on blocks (0 none); extraGore = Ultracraft's extra death blood; terrainRange = blocks of terrain sent to ULTRAKILL (64-128)";
+		+ " effects = 2 high, 1 medium, 0 low; stainCap = blood stains kept on blocks (0 none); extraGore = Ultracraft's extra death blood; terrainRange = blocks of terrain sent to ULTRAKILL (64-128);"
+		+ " ultrakillDir = ULTRAKILL's folder, only if Ultracraft can't find it through Steam (it sets up BepInEx and the UltraBridge plugin there)";
 
 	private UltracraftConfig() {}
 
@@ -167,6 +170,7 @@ public final class UltracraftConfig {
 			ukFps = Integer.parseInt(p.getProperty("ukFpsCap", Integer.toString(ukFps)).trim());
 			if (ukFps != 0) ukFps = Math.max(30, Math.min(240, ukFps));
 			fightMusic = p.getProperty("fightMusic", fightMusic).trim();
+			ultrakillDir = p.getProperty("ultrakillDir", ultrakillDir).trim();
 			bossThemes = bool(p, "bossThemes", bossThemes);
 			calmMusic = bool(p, "calmMusic", calmMusic);
 			hushMcMusic = bool(p, "hushMcMusic", hushMcMusic);
@@ -218,6 +222,7 @@ public final class UltracraftConfig {
 		p.setProperty("steveEnemies", Boolean.toString(steveEnemies));
 		p.setProperty("ukFpsCap", Integer.toString(ukFps));
 		p.setProperty("fightMusic", fightMusic);
+		p.setProperty("ultrakillDir", ultrakillDir);
 		p.setProperty("bossThemes", Boolean.toString(bossThemes));
 		p.setProperty("calmMusic", Boolean.toString(calmMusic));
 		p.setProperty("hushMcMusic", Boolean.toString(hushMcMusic));

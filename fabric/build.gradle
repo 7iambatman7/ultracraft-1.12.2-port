@@ -103,6 +103,21 @@ processResources {
 	filesMatching("fabric.mod.json") { expand "version": version, "minecraft": mc }
 	def java = project.ext.java_release
 	filesMatching("ultracraft.mixins.json") { filter { it.replace('"JAVA_21"', '"JAVA_' + java + '"') } }
+	// The ULTRAKILL side, for the mod to set up on the player's machine (UkInstaller): the UltraBridge plugin as just
+	// built, and BepInEx 5 (open source, LGPL; see ultrakill/BEPINEX-NOTICE.txt) as found in the ULTRAKILL folder it was
+	// built against (-PukDir=..., the same folder ultrabridge/UltraBridge.csproj builds against). Either one missing:
+	// the jar goes without it, and players install that part by hand.
+	def ukDir = file((project.findProperty("ukDir") ?: "D:/SteamLibrary/steamapps/common/ULTRAKILL").toString())
+	def bridge = file("../ultrabridge/bin/Release/net472/UltraBridge.dll")
+	inputs.files(bridge).optional().withPropertyName("ultraBridge")
+	from(bridge.parentFile) {
+		include "UltraBridge.dll"
+		into "ultrakill/plugin"
+	}
+	from(ukDir) {
+		include "winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt", "BepInEx/core/*.dll"
+		into "ultrakill/bepinex"
+	}
 }
 
 def javaRelease = (project.ext.java_release as int)

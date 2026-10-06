@@ -134,7 +134,7 @@ public final class ServerOps {
 		State s = STATES.remove(sp.getUUID());
 		if (s != null) for (UkEnemyEntity e : s.enemies.values()) e.discard();
 		UkBosses.stop(sp, "they left");
-		if (CyberGrind.isRunner(sp)) CyberGrind.stop(null, "the player left");
+		CyberGrind.runnerLeft(sp);
 		UcNet.setServerV1(sp.level().getServer(), sp.getUUID(), false);
 	}
 
@@ -218,6 +218,11 @@ public final class ServerOps {
 				// with a teammate still standing, only down (BossParty); in a duel, it's lost (and nobody dies)
 				if (Duels.lost(sp)) return;
 				if (BossParty.tryDown(sp)) return;
+				// the last one standing in the Grind's arenas: the run is over, and nobody dies for it
+				if (CyberGrind.inArenaRun(sp)) {
+					CyberGrind.wipe(sp);
+					return;
+				}
 				CyberGrind.stopIfRunner(sp, "V1 died");
 				UkBosses.stop(sp, "V1 died");
 				sp.kill(level);

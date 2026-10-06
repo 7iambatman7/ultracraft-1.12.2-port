@@ -71,6 +71,8 @@ final class CyberGrind {
 	/** Who came along, and where each goes back to. */
 	private record Return(ResourceKey<Level> level, Vec3 at, float yaw, float pitch) {}
 	private static final Map<UUID, Return> party = new HashMap<>();
+	/** Where a run round a shop is (its dimension). */
+	private static ResourceKey<Level> runLevel = Level.OVERWORLD;
 
 	private CyberGrind() {}
 
@@ -78,8 +80,119 @@ final class CyberGrind {
 		return running && runner != null && runner.equals(sp.getUUID());
 	}
 
+	/** The runner died alone, went back to Steve, or left the arenas: someone else carries the run on, or it ends. */
 	static void stopIfRunner(ServerPlayer sp, String why) {
-		if (isRunner(sp)) stop(sp, why);
+		if (isRunner(sp) && !handOff(sp, why)) stop(sp, why);
+	}
+
+	/** The runner left the game: someone else carries the run on, or it ends. */
+	static void runnerLeft(ServerPlayer sp) {
+		if (!isRunner(sp)) return;
+		party.remove(sp.getUUID());
+		if (!handOff(sp, sp.getName().getString() + " left")) stop(null, "the player left");
+	}
+
+	/**
+	 * The waves live in the runner's ULTRAKILL: with the runner gone, another V1 of the party takes over, and the wave
+	 * that was on starts over from theirs. Returns false if nobody can.
+	 */
+	private static boolean handOff(ServerPlayer old, String why) {
+		if (!running || !arenaMode || server == null) return false;
+		ServerPlayer next = null;
+		for (UUID id : party.keySet()) {
+			if (id.equals(old.getUUID())) continue;
+			ServerPlayer o = server.getPlayerList().getPlayer(id);
+			if (o != null && o.isAlive() && UcNet.isV1(o) && !BossParty.isDown(o) && o.level().dimension() == GrindArenas.DIMENSION) {
+				next = o;
+				break;
+			}
+		}
+		if (next == null) return false;
+		// the old runner's enemies (and a boss wave's boss) went with them
+		if (server.getPlayerList().getPlayer(old.getUUID()) != null) UcNet.send(old, "GRINDCLEAR");
+		if (bossWave) {
+			bossWave = false;
+			if (UkBosses.busy()) UkBosses.stop(old, "the Cyber Grind moved on");
+		}
+		runner = next.getUUID();
+		if (countdown < 0) wave = Math.max(0, wave - 1);
+		left = 0;
+		countdown = 100;
+		hud(next.getName().getString() + " CARRIES THE RUN ON");
+		org.slf4j.LoggerFactory.getLogger("ultracraft").info("Cyber Grind: {} ({}), {} runs it now", why, old.getName().getString(), next.getName().getString());
+		sendState();
+		return true;
+	}
+
+	/** Whether this player is in the run going on: its party in the arenas, or a V1 fighting by its shop. */
+	static boolean inRun(ServerPlayer sp) {
+		if (!running) return false;
+		if (arenaMode) return party.containsKey(sp.getUUID()) && sp.level().dimension() == GrindArenas.DIMENSION;
+		return UcNet.isV1(sp) && sp.level().dimension() == runLevel && sp.position().distanceTo(center) < LEAVE;
+	}
+
+	/** Whether the run going on is in the Grind's own arenas (anyone can join it from anywhere). */
+	static boolean inArenas() {
+		return running && arenaMode;
+	}
+
+	/** Whether this player is in a run in the Grind's own arenas (dying there ends the run, it doesn't kill). */
+	static boolean inArenaRun(ServerPlayer sp) {
+		return arenaMode && inRun(sp);
+	}
+
+	/** How many of the run's V1s are on their feet (the waves grow with them). */
+	private static int fighters() {
+		if (server == null) return 1;
+		int n = 0;
+		for (ServerPlayer o : server.getPlayerList().getPlayers()) if (inRun(o) && o.isAlive() && UcNet.isV1(o) && !BossParty.isDown(o)) n++;
+		return Math.max(1, n);
+	}
+
+	/**
+	 * Everyone in an arena run is down (the last one just died): nobody dies for it, the run is over and they all go
+	 * back where they came from.
+	 */
+	static void wipe(ServerPlayer last) {
+		BossParty.standAll(last.level().getServer());
+		UcNet.send(last, "RESPAWN");
+		last.setHealth(last.getMaxHealth());
+		stop(null, "everyone went down");
+	}
+
+	/** Shop: someone not in the arena run goes in, with them, from where they stand. */
+	static void join(ServerPlayer sp) {
+		ServerLevel level = GrindArenas.level(server);
+		if (level == null || arena == null) return;
+		if (!UcNet.isV1(sp)) {
+			sp.displayClientMessage(Component.literal("Become V1 to join the Cyber Grind."), true);
+			return;
+		}
+		party.put(sp.getUUID(), new Return(sp.level().dimension(), sp.position(), sp.getYRot(), sp.getXRot()));
+		Vec3 to = arena.spawn();
+		sp.teleportTo(level, to.x, to.y, to.z, Set.of(), sp.getYRot(), 0f, true);
+		sp.fallDistance = 0;
+		UcNet.send(sp, "SKY " + GrindArenas.sky(arenaIndex, server.overworld().getRandom()));
+		sp.connection.send(new ClientboundSetTitlesAnimationPacket(5, 40, 15));
+		sp.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal("WAVE " + wave + "  -  " + arena.def().title()).withStyle(ChatFormatting.GRAY)));
+		sp.connection.send(new ClientboundSetTitleTextPacket(Component.literal("THE CYBER GRIND").withStyle(ChatFormatting.RED, ChatFormatting.BOLD)));
+		hud(sp.getName().getString() + " JOINED THE RUN");
+		sendState();
+	}
+
+	/** Shop: a party member (not the runner) leaves on their own; the run goes on without them. */
+	private static void leave(ServerPlayer sp) {
+		Return r = party.remove(sp.getUUID());
+		UcNet.send(sp, "SKY -");
+		if (r != null && server != null) {
+			ServerLevel back = server.getLevel(r.level());
+			if (back == null) back = server.overworld();
+			sp.teleportTo(back, r.at().x, r.at().y, r.at().z, Set.of(), r.yaw(), r.pitch(), true);
+			sp.fallDistance = 0;
+		}
+		sp.displayClientMessage(Component.literal(String.format(Locale.ROOT, "You left the Cyber Grind at wave %d; it goes on without you.", wave)), false);
+		hud(sp.getName().getString() + " LEFT THE RUN");
+		sendState();
 	}
 
 	/** The world closed. */
@@ -98,10 +211,16 @@ final class CyberGrind {
 		return server == null || runner == null ? null : server.getPlayerList().getPlayer(runner);
 	}
 
-	/** GRIND id from a shop's screen: start a run around that shop, or end the one going on. */
+	/**
+	 * GRIND id from a shop's screen: start a run around that shop, or, with one going on: the runner ends it, someone
+	 * else in it leaves it, someone not in it joins it.
+	 */
 	static void toggle(ServerPlayer sp, long id) {
 		if (running) {
-			stop(sp, "left");
+			if (isRunner(sp)) stop(sp, "left");
+			else if (arenaMode && party.containsKey(sp.getUUID())) leave(sp);
+			else if (arenaMode) join(sp);
+			else sp.displayClientMessage(Component.literal("The Cyber Grind is on around a shop: fight there with them."), true);
 			return;
 		}
 		if (UkBosses.busy()) {
@@ -117,6 +236,7 @@ final class CyberGrind {
 		shopId = id;
 		runner = sp.getUUID();
 		server = sp.level().getServer();
+		runLevel = sp.level().dimension();
 		running = true;
 		wave = 0;
 		left = 0;
@@ -149,6 +269,7 @@ final class CyberGrind {
 		server = sp.level().getServer();
 		if (GrindArenas.level(server) == null) return false;
 		runner = sp.getUUID();
+		runLevel = GrindArenas.DIMENSION;
 		running = true;
 		wave = 0;
 		left = 0;
@@ -230,7 +351,7 @@ final class CyberGrind {
 		if (!running) return;
 		if (arenaMode) {
 			if (sp.level().dimension() != GrindArenas.DIMENSION) {
-				stop(sp, "left the arenas");
+				stopIfRunner(sp, "left the arenas");
 				return;
 			}
 			// off the edge: back onto the arena, as ULTRAKILL puts V1 back after a fall
@@ -278,11 +399,13 @@ final class CyberGrind {
 		ServerLevel level = sp.level();
 		RandomSource random = level.getRandom();
 		if (wave % BOSS_EVERY == 0 && bossWave(sp, level, random)) return;
-		// the budget grows with every wave; the biggest enemies come in later
-		int budget = 4 + wave * 3 + wave * wave / 4;
+		// the budget grows with every wave (and with every V1 fighting it); the biggest enemies come in later
+		int fighters = fighters();
+		int budget = Math.round((4 + wave * 3 + wave * wave / 4) * (1f + 0.6f * (fighters - 1)));
+		int most = Math.round((4 + wave * 2) * (1f + 0.5f * (fighters - 1)));
 		List<Kind> spawn = new ArrayList<>();
 		int guard = 0;
-		while (budget > 0 && spawn.size() < 4 + wave * 2 && guard++ < 200) {
+		while (budget > 0 && spawn.size() < most && guard++ < 400) {
 			List<Kind> can = new ArrayList<>();
 			for (Kind k : KINDS) if (k.from <= wave && k.cost <= budget) can.add(k);
 			if (can.isEmpty()) break;
@@ -300,7 +423,7 @@ final class CyberGrind {
 			UcNet.send(sp, String.format(Locale.ROOT, "SPAWNAT %s %.2f %.2f %.2f 2", k.type, at.x, y, at.z));
 			left++;
 		}
-		org.slf4j.LoggerFactory.getLogger("ultracraft").info("Cyber Grind wave {}:{}", wave, log);
+		org.slf4j.LoggerFactory.getLogger("ultracraft").info("Cyber Grind wave {} ({} fighting):{}", wave, fighters, log);
 		hud("WAVE " + wave);
 		sendState();
 	}
@@ -389,6 +512,8 @@ final class CyberGrind {
 			UltracraftConfig.save();
 		}
 		UcNet.send(sp, "GRINDCLEAR");
+		// whoever went down in it gets back up
+		BossParty.reviveAll();
 		countdown = 100;
 		if (arenaMode && ++wavesHere >= WAVES_PER_ARENA) {
 			// the arena is cleared: the next one, once the party has had a breather
@@ -468,20 +593,22 @@ final class CyberGrind {
 		if (server != null) UcNet.sendAll(server, "GRINDHUD " + text);
 	}
 
-	private static String stateLine() {
-		return "GRINDSTATE " + (running ? 1 : 0) + " " + wave + " " + UltracraftConfig.grindBest + " " + (UltracraftConfig.ukSpawns ? 1 : 0);
+	/** GRINDSTATE running wave best spawns in: in, whether this player is in the run (else a shop's button joins it). */
+	private static String stateLine(ServerPlayer sp) {
+		boolean in = running && (isRunner(sp) || (arenaMode ? party.containsKey(sp.getUUID()) : inRun(sp)));
+		return "GRINDSTATE " + (running ? 1 : 0) + " " + wave + " " + UltracraftConfig.grindBest + " " + (UltracraftConfig.ukSpawns ? 1 : 0) + " " + (in ? 1 : 0);
 	}
 
-	/** GRINDSTATE running wave best spawns, for every shop screen. */
+	/** Every V1's shop screens hear how the Grind stands. */
 	static void sendState() {
-		if (server != null) UcNet.sendAll(server, stateLine());
+		if (server != null) sendStateAll(server);
 	}
 
 	static void sendState(ServerPlayer sp) {
-		UcNet.send(sp, stateLine());
+		UcNet.send(sp, stateLine(sp));
 	}
 
 	static void sendStateAll(net.minecraft.server.MinecraftServer s) {
-		UcNet.sendAll(s, stateLine());
+		for (ServerPlayer sp : s.getPlayerList().getPlayers()) if (UcNet.isV1(sp)) sendState(sp);
 	}
 }

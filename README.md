@@ -30,7 +30,8 @@ ULTRAKILL not found (installed somewhere unusual)? Put its folder in `config/ult
 stuck: unzip BepInEx 5 (x64, https://github.com/BepInEx/BepInEx/releases) into the ULTRAKILL folder yourself, and put
 `UltraBridge.dll` from `Ultracraft.zip` in `ULTRAKILL/BepInEx/plugins/UltraBridge/`.
 
-Commands: `/uc help`.
+Commands: `/uc help`. On someone else's world, the ones that hand things out (P, weapons, upgrades, calling bosses) are
+for the host and operators.
 
 Stuck on "ULTRAKILL connected - loading V1..."? Update to the latest release: older ones waited forever on an ULTRAKILL
 save that hadn't finished the tutorial. The message now names the ULTRAKILL level it's waiting in.
@@ -122,16 +123,19 @@ Everyone plays with their own ULTRAKILL (it starts by itself when Minecraft does
 
 You share the world and the fight: each player's ULTRAKILL runs the enemies around them, and the others see and hit
 them too. Other players show up as V1, holding the gun they have out, and you see and hear what they do: their beams,
-projectiles, explosions and shots. Each player has their own P, gear and upgrades.
+projectiles, explosions and shots. Each player has their own P, gear and upgrades; `/uc p give <player> <amount>`
+hands some of yours to someone else.
 
 Over ULTRAKILL's view, each other player has their name, health and distance over their head, seen through walls, and
 at the screen's edge when they're off it (**Teammate Markers**, Gameplay settings).
 
 Bosses fight every V1 nearby: one goes for whoever hurts it most and is close, holds on to them for a few seconds, and
-now and then turns on someone else. Everyone but the player it came for sees its health in a boss bar. Die in a boss
-fight while a teammate fights on and you're only down: the camera follows a teammate (the mouse turns it round them,
-left and right click switch teammate) until the boss is beaten, then you're back on your feet beside them. Only when
-everyone is down does the boss leave.
+now and then turns on someone else. Everyone but the player it came for sees its health in a boss bar.
+
+Die in a boss fight (or a Cyber Grind run) while a teammate fights on and you're only **down**: the camera follows a
+teammate (the mouse turns it round them, left and right click switch teammate), and a marker of green light stands
+where you fell. A teammate who stands on it for 4 seconds (2 with two of them) brings you back up right there. Otherwise
+you're back beside them once the boss is beaten or the Grind's wave is cleared. Only when everyone is down is it lost.
 
 **Duels**: `/uc duel <player>` challenges another V1; they accept with a click in chat (or `/uc duel accept`). After a
 countdown your shots, punches and blasts hurt each other (half as hard as they'd hurt a mob). The first V1 down loses,
@@ -174,6 +178,11 @@ shop near its edge, under a column of lights (the chat says which way): **Leave*
 everyone back to where they started. `/uc grind start` starts a run on your own, `/uc grind arena <1-50>` starts in
 that arena, `/uc grind stop` ends the run. With the setting off, the waves come round the shop you started
 from.
+
+**Co-op**: anyone can join a run already going: **Join** on any shop's Cyber Grind page, or `/uc grind join`. The waves
+grow with every V1 fighting them. Go down and a teammate can bring you back (or you're up again when the wave is
+cleared); with everyone down the run is over and you all go back where you started, alive. Leave on a shop takes just
+you out, and if the player who started it leaves, the next one carries the run on.
 
 ## Made with AI
 

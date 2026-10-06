@@ -71,7 +71,10 @@ public final class UcNet {
 	/** The client half (from the client initializer). */
 	static void registerClient() {
 		ClientPlayNetworking.registerGlobalReceiver(ToClient.TYPE, (payload, ctx) -> fromServer(payload.msg()));
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, mc) -> CLIENT_V1.clear());
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, mc) -> {
+			CLIENT_V1.clear();
+			Teammates.downs("");
+		});
 	}
 
 	// ------------------------------------------------------------------ who is V1

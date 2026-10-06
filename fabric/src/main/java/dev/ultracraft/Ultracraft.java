@@ -823,6 +823,10 @@ public final class Ultracraft implements ClientModInitializer {
 			setDowned(Minecraft.getInstance(), msg.startsWith("DOWNED 1"), msg.endsWith("dead"));
 		} else if (msg.startsWith("WATCH ")) {
 			Spectate.watch(msg.substring(6));
+		} else if (msg.equals("SETTINGS")) {
+			Minecraft.getInstance().setScreen(new UcSettingsScreen(null));
+		} else if (msg.startsWith("DOWNS")) {
+			Teammates.downs(msg.length() > 6 ? msg.substring(6) : "");
 		} else if (msg.startsWith("DUEL ")) {
 			duel(Minecraft.getInstance(), msg.substring(5).trim());
 		} else if (msg.startsWith("V1S ")) {

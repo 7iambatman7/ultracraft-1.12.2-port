@@ -76,7 +76,7 @@ public final class Spectate {
 		Entity t = target(mc);
 		String who = !watchName.isEmpty() ? watchName : t != null ? t.getName().getString() : "a teammate";
 		String line1 = "YOU'RE DOWN  -  WATCHING " + who.toUpperCase(java.util.Locale.ROOT);
-		String line2 = "Beat the boss and you're back.  Left / right click: next / previous teammate";
+		String line2 = "A teammate standing where you fell brings you back.  Left / right click: next / previous teammate";
 		int y = 10;
 		int tw = Math.max(mc.font.width(line1), mc.font.width(line2));
 		ctx.fill(w / 2 - tw / 2 - 6, y - 4, w / 2 + tw / 2 + 6, y + 32, 0xA0000000);

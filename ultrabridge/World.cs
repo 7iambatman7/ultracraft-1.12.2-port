@@ -75,14 +75,16 @@ namespace UltraBridge
                 }
                 case "GRINDSTATE":
                 {
-                    // GRINDSTATE running wave best spawns: the Cyber Grind as Minecraft runs it, and whether ULTRAKILL's
-                    // enemies spawn in the dark (both shown on every shop's screen)
+                    // GRINDSTATE running wave best spawns [in]: the Cyber Grind as Minecraft runs it, whether ULTRAKILL's
+                    // enemies spawn in the dark (both shown on every shop's screen), and whether we're in the run (a run
+                    // we're not in, the button joins)
                     var a = rest.Split(' ');
                     if (a.Length < 4) break;
                     grindRunning = a[0] == "1";
                     grindWave = int.Parse(a[1]);
                     grindBest = int.Parse(a[2]);
                     spawnsOn = a[3] == "1";
+                    grindIn = a.Length > 4 ? a[4] == "1" : grindRunning;
                     foreach (var go in shops.Values) if (go != null) ShopTexts(go);
                     break;
                 }
@@ -989,7 +991,7 @@ namespace UltraBridge
         Vector3 shopFront;    // the way its screen faces, in that space
         float shopScale;      // the root's scale as placed (ULTRAKILL's own, unless that wouldn't fit)
         bool shopFailed, shopTouch, shopNear;
-        bool grindRunning, spawnsOn = true;
+        bool grindRunning, grindIn, spawnsOn = true;
         int grindWave, grindBest;
         readonly Dictionary<string, GameObject> shops = new Dictionary<string, GameObject>();
         static readonly AccessTools.FieldRef<ScreenZone, bool> ZoneTouch = AccessTools.FieldRefAccess<ScreenZone, bool>("touchMode");
@@ -1239,12 +1241,14 @@ namespace UltraBridge
         {
             var main = go.transform.Find("Canvas/Background/Main Panel");
             if (main == null) return;
-            SetText(main.Find("The Cyber Grind/Cyber Grind Panel/Panel/Text Inset/Text"), grindRunning
-                ? "<color=#FF4343>The Cyber Grind</color> is running around this terminal.\n\nWave <color=#FF4343>" + grindWave + "</color>, best <color=#FF4343>" + grindBest
-                  + "</color>.\n\nDying or running away ends it."
+            SetText(main.Find("The Cyber Grind/Cyber Grind Panel/Panel/Text Inset/Text"), grindRunning && !grindIn
+                ? "<color=#FF4343>The Cyber Grind</color> is on: another V1 is at wave <color=#FF4343>" + grindWave + "</color>.\n\nJoin them: the waves grow with every V1 in it."
+                : grindRunning
+                ? "<color=#FF4343>The Cyber Grind</color> is running.\n\nWave <color=#FF4343>" + grindWave + "</color>, best <color=#FF4343>" + grindBest
+                  + "</color>.\n\nGo down and a teammate can bring you back; with nobody standing, it's over."
                 : "<color=#FF4343>The Cyber Grind</color> is an endless survival mode.\n\nWave after wave of enemies <color=#FF4343>around this terminal</color>, each bigger than the last."
                   + (grindBest > 0 ? "\n\nBest: <color=#FF4343>wave " + grindBest + "</color>" : ""));
-            SetText(main.Find("The Cyber Grind/Cyber Grind Panel/Panel/Enter Button/Text"), grindRunning ? "Leave The Cyber Grind" : "Enter The Cyber Grind");
+            SetText(main.Find("The Cyber Grind/Cyber Grind Panel/Panel/Enter Button/Text"), grindRunning ? (grindIn ? "Leave The Cyber Grind" : "Join The Cyber Grind") : "Enter The Cyber Grind");
             SetText(main.Find("Sandbox/Sandbox Panel/Panel/Text Inset/Text"),
                 "The <color=#FF4343>Sandbox</color> is an empty level that can be used for practicing.\n\nThis one is <color=#FF4343>Minecraft</color>.\n\nEnemies spawning in the dark: <color=#FF4343>"
                 + (spawnsOn ? "ON" : "OFF") + "</color>");

@@ -21,7 +21,8 @@ import net.minecraft.server.level.ServerPlayer;
  * /uc (or /ultracraft): try everything Ultracraft adds without earning it first. Works in any world, cheats on or not.
  * <pre>
  * /uc p                         this world's P
- * /uc p add|take|set &lt;amount&gt;
+ * /uc p add|take|set &lt;amount&gt;     (these and the others that hand things out: the host or operators only)
+ * /uc p give &lt;player&gt; &lt;amount&gt; your P to another player
  * /uc weapons all|none|list     every weapon, variant, alternate and arm / back to the Piercer and Feedbacker
  * /uc weapons give|take &lt;gear&gt;  one piece (rev1, sho0, shoalt, arm1...)
  * /uc upgrades max|reset|list
@@ -31,7 +32,7 @@ import net.minecraft.server.level.ServerPlayer;
  * /uc boss kill|leave|list|status
  * /uc boss timer &lt;minutes&gt;      the next boss after that much play
  * /uc bosses on|off
- * /uc grind start|arena &lt;n&gt;|stop
+ * /uc grind start|join|arena &lt;n&gt;|stop
  * /uc duel &lt;player&gt;|accept|decline|forfeit   PvP with another V1
  * </pre>
  */
@@ -47,18 +48,21 @@ final class UkCommands {
 			.executes(c -> help(c))
 			.then(Commands.literal("p")
 				.executes(c -> say(c, "This world has " + money(c) + "."))
-				.then(Commands.literal("add").then(Commands.argument("amount", IntegerArgumentType.integer(0)).executes(c -> money(c, IntegerArgumentType.getInteger(c, "amount"), false))))
-				.then(Commands.literal("take").then(Commands.argument("amount", IntegerArgumentType.integer(0)).executes(c -> money(c, -IntegerArgumentType.getInteger(c, "amount"), false))))
-				.then(Commands.literal("set").then(Commands.argument("amount", IntegerArgumentType.integer(0)).executes(c -> money(c, IntegerArgumentType.getInteger(c, "amount"), true)))))
+				.then(Commands.literal("add").requires(UkCommands::cheats).then(Commands.argument("amount", IntegerArgumentType.integer(0)).executes(c -> money(c, IntegerArgumentType.getInteger(c, "amount"), false))))
+				.then(Commands.literal("take").requires(UkCommands::cheats).then(Commands.argument("amount", IntegerArgumentType.integer(0)).executes(c -> money(c, -IntegerArgumentType.getInteger(c, "amount"), false))))
+				.then(Commands.literal("set").requires(UkCommands::cheats).then(Commands.argument("amount", IntegerArgumentType.integer(0)).executes(c -> money(c, IntegerArgumentType.getInteger(c, "amount"), true))))
+				// P from you to another player (theirs is theirs: each player has their own)
+				.then(Commands.literal("give").then(Commands.argument("player", EntityArgument.player())
+					.then(Commands.argument("amount", IntegerArgumentType.integer(1)).executes(c -> giveP(c, EntityArgument.getPlayer(c, "player"), IntegerArgumentType.getInteger(c, "amount")))))))
 			.then(Commands.literal("weapons")
-				.then(Commands.literal("all").executes(c -> {
+				.then(Commands.literal("all").requires(UkCommands::cheats).executes(c -> {
 					UkProgress p = progress(c);
 					p.gear.addAll(GEAR);
 					p.setDirty();
 					p.send();
 					return say(c, "Every weapon, variant, alternate, arm and colour is yours.");
 				}))
-				.then(Commands.literal("none").executes(c -> {
+				.then(Commands.literal("none").requires(UkCommands::cheats).executes(c -> {
 					UkProgress p = progress(c);
 					p.gear.clear();
 					p.setDirty();
@@ -75,15 +79,15 @@ final class UkCommands {
 					for (String g : p.gear) names.add(GearNames.of(g));
 					return say(c, "Owned: Piercer Revolver, Feedbacker" + (names.isEmpty() ? "" : ", " + String.join(", ", names)) + (UltracraftConfig.allGear ? " (allGear is on: everything)" : ""));
 				}))
-				.then(Commands.literal("give").then(Commands.argument("gear", StringArgumentType.word())
+				.then(Commands.literal("give").requires(UkCommands::cheats).then(Commands.argument("gear", StringArgumentType.word())
 					.suggests((c, b) -> SharedSuggestionProvider.suggest(GEAR, b))
 					.executes(c -> gear(c, StringArgumentType.getString(c, "gear"), true))))
-				.then(Commands.literal("take").then(Commands.argument("gear", StringArgumentType.word())
+				.then(Commands.literal("take").requires(UkCommands::cheats).then(Commands.argument("gear", StringArgumentType.word())
 					.suggests((c, b) -> SharedSuggestionProvider.suggest(GEAR, b))
 					.executes(c -> gear(c, StringArgumentType.getString(c, "gear"), false)))))
 			.then(Commands.literal("upgrades")
-				.then(Commands.literal("max").executes(c -> upgradeAll(c, true)))
-				.then(Commands.literal("reset").executes(c -> upgradeAll(c, false)))
+				.then(Commands.literal("max").requires(UkCommands::cheats).executes(c -> upgradeAll(c, true)))
+				.then(Commands.literal("reset").requires(UkCommands::cheats).executes(c -> upgradeAll(c, false)))
 				.then(Commands.literal("list").executes(c -> {
 					UkProgress p = progress(c);
 					StringBuilder sb = new StringBuilder("Upgrades:");
@@ -96,7 +100,7 @@ final class UkCommands {
 					}
 					return say(c, sb.toString());
 				}))
-				.then(Commands.literal("set").then(Commands.argument("upgrade", StringArgumentType.word())
+				.then(Commands.literal("set").requires(UkCommands::cheats).then(Commands.argument("upgrade", StringArgumentType.word())
 					.suggests((c, b) -> SharedSuggestionProvider.suggest(UkUpgrades.keys(), b))
 					.then(Commands.argument("level", IntegerArgumentType.integer(1, 20)).executes(c -> {
 						String key = StringArgumentType.getString(c, "upgrade");
@@ -107,13 +111,19 @@ final class UkCommands {
 						return say(c, UkUpgrades.name(key) + " is level " + p.level(key) + " of " + UkUpgrades.TRACKS.get(key).max() + ".");
 					})))))
 			.then(Commands.literal("settings").executes(c -> {
-				// the settings screen is Minecraft's (client side): open it on the next frame
+				// the settings screen is Minecraft's (client side): open it on the next frame, in the game of whoever asked
+				// (a player on someone else's world: their own, not the host's)
+				ServerPlayer asker = c.getSource().getPlayer();
+				if (asker != null && !UcNet.isLocal(asker)) {
+					UcNet.send(asker, "C:SETTINGS");
+					return 1;
+				}
 				net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
 				mc.execute(() -> mc.setScreen(new UcSettingsScreen(null)));
 				return 1;
 			}))
 			.then(Commands.literal("boss")
-				.then(Commands.literal("call").then(Commands.argument("boss", StringArgumentType.word())
+				.then(Commands.literal("call").requires(UkCommands::cheats).then(Commands.argument("boss", StringArgumentType.word())
 					.suggests((c, b) -> {
 						List<String> keys = new ArrayList<>(List.of("next"));
 						for (UkBosses.Boss boss : UkBosses.ROSTER) keys.add(boss.key());
@@ -131,7 +141,7 @@ final class UkCommands {
 							})
 							.executes(c -> callBoss(c, StringArgumentType.getString(c, "boss"), IntegerArgumentType.getInteger(c, "seconds"),
 								StringArgumentType.getString(c, "mods")))))))
-				.then(Commands.literal("kill").executes(c -> {
+				.then(Commands.literal("kill").requires(UkCommands::cheats).executes(c -> {
 					int id = UkBosses.fightId();
 					if (id == 0) return fail(c, "No boss is fighting you.");
 					ServerPlayer t = UkBosses.target(c.getSource().getServer());
@@ -140,6 +150,9 @@ final class UkCommands {
 				}))
 				.then(Commands.literal("leave").executes(c -> {
 					if (!UkBosses.busy()) return fail(c, "No boss is coming or here.");
+					// (a boss coming for someone else is theirs to send away, or the host's)
+					ServerPlayer t = UkBosses.target(c.getSource().getServer());
+					if (t != null && t != c.getSource().getPlayer() && !cheats(c.getSource())) return fail(c, "That boss is after " + t.getName().getString() + ".");
 					UkBosses.stop(player(c), "sent away");
 					return 1;
 				}))
@@ -158,13 +171,13 @@ final class UkCommands {
 					return say(c, String.format(Locale.ROOT, "Bosses %s. Now: %s. Next one after about %d more minutes of play. Beaten: %d.",
 						UltracraftConfig.bosses ? "on" : "off", UkBosses.state(), (left + 1199) / 1200, p.bossesBeaten()));
 				}))
-				.then(Commands.literal("timer").then(Commands.argument("minutes", IntegerArgumentType.integer(0, 600)).executes(c -> {
+				.then(Commands.literal("timer").requires(UkCommands::cheats).then(Commands.argument("minutes", IntegerArgumentType.integer(0, 600)).executes(c -> {
 					UkProgress p = progress(c);
 					p.nextBoss = p.bossClock + IntegerArgumentType.getInteger(c, "minutes") * 1200L;
 					p.setDirty();
 					return say(c, "The next boss comes after " + IntegerArgumentType.getInteger(c, "minutes") + " minutes of play.");
 				}))))
-			.then(Commands.literal("bosses")
+			.then(Commands.literal("bosses").requires(UkCommands::cheats)
 				.then(Commands.literal("on").executes(c -> bosses(c, true)))
 				.then(Commands.literal("off").executes(c -> bosses(c, false))))
 			// PvP: challenge another V1 (Duels), answer a challenge, or give up
@@ -179,9 +192,18 @@ final class UkCommands {
 				})))
 			// the Cyber Grind's arenas: a run from a random one or straight to one (its waves start as usual), or out of them
 			.then(Commands.literal("grind")
+				// into another V1's run (in the Grind's arenas), from wherever you are
+				.then(Commands.literal("join").executes(c -> {
+					ServerPlayer sp = player(c);
+					if (!CyberGrind.running) return fail(c, "The Cyber Grind isn't running: /uc grind start, or start it from a shop.");
+					if (CyberGrind.inRun(sp)) return fail(c, "You're in it already.");
+					if (!CyberGrind.inArenas()) return fail(c, "That run is round a shop: go there and fight.");
+					CyberGrind.join(sp);
+					return 1;
+				}))
 				.then(Commands.literal("start").executes(c -> {
 					ServerPlayer sp = player(c);
-					if (CyberGrind.running) return fail(c, "The Cyber Grind is already running: /uc grind stop first.");
+					if (CyberGrind.running) return fail(c, "The Cyber Grind is already running: /uc grind join to go in with them.");
 					if (!CyberGrind.startArenas(sp, -1)) return fail(c, "Become V1 first.");
 					return say(c, "Into the Cyber Grind.");
 				}))
@@ -193,11 +215,32 @@ final class UkCommands {
 				})))
 				.then(Commands.literal("stop").executes(c -> {
 					if (!CyberGrind.running) return fail(c, "The Cyber Grind isn't running.");
+					if (!CyberGrind.isRunner(player(c)) && !cheats(c.getSource())) return fail(c, "It's not your run: leave from its shop instead.");
 					CyberGrind.stop(player(c), "stopped");
 					return say(c, "The Cyber Grind stopped.");
 				})));
 		var node = d.register(root);
 		d.register(Commands.literal("ultracraft").executes(c -> help(c)).redirect(node));
+	}
+
+	/** Cheats: the host (or singleplayer), an operator, or the console. */
+	private static boolean cheats(CommandSourceStack src) {
+		ServerPlayer sp = src.getPlayer();
+		return sp == null || ServerOps.cheatsAllowed(sp);
+	}
+
+	/** /uc p give player amount: P from you to them. */
+	private static int giveP(CommandContext<CommandSourceStack> c, ServerPlayer to, int amount) throws CommandSyntaxException {
+		ServerPlayer from = player(c);
+		if (to == from) return fail(c, "That's you.");
+		UkProgress mine = UkProgress.get(from), theirs = UkProgress.get(to);
+		if (mine == theirs) return fail(c, "You two share your P already.");
+		if (mine.money < amount) return fail(c, String.format(Locale.ROOT, "You only have %,d P.", mine.money));
+		mine.add(-amount);
+		mine.sendMoney();
+		theirs.award(amount);
+		to.sendSystemMessage(Component.literal(String.format(Locale.ROOT, "[Ultracraft] %s gave you %,d P.", from.getName().getString(), amount)).withStyle(ChatFormatting.GOLD));
+		return say(c, String.format(Locale.ROOT, "You gave %s %,d P. You have %,d P left.", to.getName().getString(), amount, mine.money));
 	}
 
 	private static int duelAnswer(CommandContext<CommandSourceStack> c, boolean yes) throws CommandSyntaxException {
@@ -206,8 +249,8 @@ final class UkCommands {
 	}
 
 	private static int help(CommandContext<CommandSourceStack> c) {
-		return say(c, "/uc p [add|take|set <amount>]\n/uc weapons all|none|list|give <gear>|take <gear>\n/uc upgrades max|reset|list|set <upgrade> <level>\n/uc settings"
-			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind start|arena <1-50>|stop\n/uc duel <player>|accept|decline|forfeit");
+		return say(c, "/uc p [give <player> <amount>|add|take|set <amount>]\n/uc weapons all|none|list|give <gear>|take <gear>\n/uc upgrades max|reset|list|set <upgrade> <level>\n/uc settings"
+			+ "\n/uc boss call <boss|next> [seconds] [mods,difficulty]\n/uc boss kill|leave|list|status|timer <minutes>\n/uc bosses on|off\n/uc grind start|join|arena <1-50>|stop\n/uc duel <player>|accept|decline|forfeit");
 	}
 
 	private static ServerPlayer player(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {

@@ -1,0 +1,75 @@
+// Ultracraft for Minecraft 1.12.2 (Forge).
+// Build with JDK 8 and Gradle 4.9: gradle clean build
+// ForgeGradle 3 is required because the current Forge Maven artifacts use UserDev 3.
+
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:3.0.197'
+    }
+}
+
+apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'java'
+
+version = '1.0.4'
+group = 'dev.ultracraft'
+archivesBaseName = 'ultracraft'
+
+sourceCompatibility = targetCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8'
+compileJava.options.encoding = 'UTF-8'
+
+def minecraftVersion = '1.12.2'
+
+def forgeVersion = '14.23.5.2860'
+
+minecraft {
+    // Equivalent to the old ForgeGradle 2.3 mapping name stable_39.
+    mappings channel: 'stable', version: '39-1.12'
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                ultracraft {
+                    source sourceSets.main
+                }
+            }
+        }
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                ultracraft {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+repositories {
+    maven { url = 'https://maven.minecraftforge.net/' }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraftVersion}-${forgeVersion}"
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'mcversion', minecraftVersion
+
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+        expand 'version': project.version, 'mcversion': minecraftVersion
+    }
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'mcmod.info'
+    }
+}

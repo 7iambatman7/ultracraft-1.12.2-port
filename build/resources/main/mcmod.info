@@ -1,0 +1,12 @@
+[
+  {
+    "modid": "ultracraft",
+    "name": "Ultracraft",
+    "description": "Plays the real ULTRAKILL's V1 inside Minecraft 1.12.2: ULTRAKILL runs alongside and is streamed into this window; Minecraft blocks and mobs are sent back as its world and enemies.",
+    "version": "1.0.4",
+    "mcversion": "1.12.2",
+    "authorList": ["V1"],
+    "credits": "Port of github.com/alfr0762/ultracraft to Forge 1.12.2",
+    "dependencies": []
+  }
+]

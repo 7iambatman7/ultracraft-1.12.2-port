@@ -4,7 +4,7 @@ A work-in-progress port of [Ultracraft](https://github.com/alfr0762/ultracraft) 
 
 This repository is the Forge port, not the original Fabric project. The original project targets a much newer Minecraft version, so features that depend on newer registries, entities, rendering hooks, or data formats need separate 1.12.2 implementations.
 
-> **Status: experimental / incomplete.** The project has source-level changes, but it has not been verified in a live Minecraft session. Expect missing features and input conflicts; do not treat the current source as a finished release.
+> **Status: experimental / incomplete.** The project has source-level changes, so expect missing features and input conflicts; do not treat the current source as a finished release.
 
 ## Compatibility
 
